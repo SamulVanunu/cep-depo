@@ -16,6 +16,12 @@
       },
       "permissions": []
     },
-    "plugins": []
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "c3701d37-83cf-4dbb-9ada-8284bbe343cc"
+      }
+    },
+    "owner": "samuelvanunu34"
   }
 }
