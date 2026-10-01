@@ -24,6 +24,14 @@ describe('getPublicEnv', () => {
       EXPO_PUBLIC_SUPABASE_URL: 'https://project.supabase.co',
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '   ',
     },
+    {
+      EXPO_PUBLIC_SUPABASE_URL: 'https://project.supabase.co',
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_must_never_ship',
+    },
+    {
+      EXPO_PUBLIC_SUPABASE_URL: 'https://project.supabase.co',
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'eyJhbGciOiJIUzI1NiJ9.service-role-jwt',
+    },
   ])('rejects missing or malformed public configuration', (source: Record<string, string | undefined>) => {
     expect(() => getPublicEnv(source)).toThrow(
       'Supabase yapılandırması eksik veya geçersiz.',

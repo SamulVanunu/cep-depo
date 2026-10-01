@@ -8,6 +8,14 @@ export type PublicLinks = Readonly<{
   contact: string | null;
 }>;
 
+function defaultSource(): PublicLinkSource {
+  return {
+    EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL,
+    EXPO_PUBLIC_TERMS_URL: process.env.EXPO_PUBLIC_TERMS_URL,
+    EXPO_PUBLIC_CONTACT_URL: process.env.EXPO_PUBLIC_CONTACT_URL,
+  };
+}
+
 function validHttps(value: string | undefined): string | null {
   if (!value) return null;
   try {
@@ -28,7 +36,7 @@ function validContact(value: string | undefined): string | null {
   return null;
 }
 
-export function getPublicLinks(source: PublicLinkSource = process.env): PublicLinks {
+export function getPublicLinks(source: PublicLinkSource = defaultSource()): PublicLinks {
   return Object.freeze({
     privacy: validHttps(source.EXPO_PUBLIC_PRIVACY_URL),
     terms: validHttps(source.EXPO_PUBLIC_TERMS_URL),

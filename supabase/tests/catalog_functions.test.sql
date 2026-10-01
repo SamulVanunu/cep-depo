@@ -1,6 +1,6 @@
 begin;
 
-select plan(10);
+select plan(11);
 
 select results_eq(
   $$
@@ -29,6 +29,12 @@ select throws_ok(
   '22023',
   'Desteklenmeyen katalog sıralaması: unsupported',
   'search rejects unknown sort values'
+);
+
+select results_eq(
+  $$select count(*)::bigint from public.search_catalog('%', null, 'popular')$$,
+  array[0::bigint],
+  'search treats SQL wildcard characters as literal text'
 );
 
 select throws_ok(

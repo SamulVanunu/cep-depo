@@ -28,7 +28,7 @@ EXPO_PUBLIC_TERMS_URL=https://example.com/terms
 EXPO_PUBLIC_CONTACT_URL=mailto:support@example.com
 ```
 
-Supabase publishable/anon anahtarları istemcide kullanılmak üzere public değerlerdir; güvenlik RLS ve sınırlı grant'lerle sağlanır. **Service-role, secret key, veritabanı parolası veya başka bir ayrıcalıklı anahtarı mobil uygulamaya ya da `EXPO_PUBLIC_*` değişkenlerine eklemeyin.**
+Supabase publishable anahtarı istemcide kullanılmak üzere public bir değerdir; güvenlik RLS ve sınırlı grant'lerle sağlanır. Uygulama yalnız `sb_publishable_...` biçimini kabul eder. **Service-role, secret key, veritabanı parolası veya başka bir ayrıcalıklı anahtarı mobil uygulamaya ya da `EXPO_PUBLIC_*` değişkenlerine eklemeyin.**
 
 Gizlilik ve kullanım koşulları yalnız HTTPS kabul eder. İletişim değeri HTTPS veya `mailto:` olabilir. Eksik veya geçersiz bağlantılar uygulamada `Yapılandırılmadı` olarak görünür.
 

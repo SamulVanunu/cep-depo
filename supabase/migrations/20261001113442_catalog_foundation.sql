@@ -223,12 +223,18 @@ begin
   from public.catalog_app_cards as card
   where (
       nullif(btrim(coalesce(p_query, '')), '') is null
-      or extensions.unaccent(lower(card.title)) like
-        '%' || extensions.unaccent(lower(btrim(p_query))) || '%'
-      or extensions.unaccent(lower(card.short_description)) like
-        '%' || extensions.unaccent(lower(btrim(p_query))) || '%'
-      or extensions.unaccent(lower(card.category_name::text)) like
-        '%' || extensions.unaccent(lower(btrim(p_query))) || '%'
+      or strpos(
+        extensions.unaccent(lower(card.title)),
+        extensions.unaccent(lower(btrim(p_query)))
+      ) > 0
+      or strpos(
+        extensions.unaccent(lower(card.short_description)),
+        extensions.unaccent(lower(btrim(p_query)))
+      ) > 0
+      or strpos(
+        extensions.unaccent(lower(card.category_name::text)),
+        extensions.unaccent(lower(btrim(p_query)))
+      ) > 0
     )
     and (
       nullif(btrim(coalesce(p_category_slug, '')), '') is null

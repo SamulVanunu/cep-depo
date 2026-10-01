@@ -83,8 +83,8 @@ export function createCatalogRepository(client: CatalogClient): CatalogRepositor
         )
         .eq('slug', normalizedSlug)
         .eq('status', 'active')
-        .order('version_code', { ascending: false, referencedTable: 'app_versions' })
-        .order('position', { ascending: true, referencedTable: 'app_screenshots' })
+        .order('version_code', { ascending: false, referencedTable: 'versions' })
+        .order('position', { ascending: true, referencedTable: 'screenshots' })
         .maybeSingle();
 
       if (error?.code === 'PGRST116') return null;

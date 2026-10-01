@@ -3,7 +3,11 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '../../src/components/ui/AppText';
-import { getPublicLinks, openPublicLink } from '../../src/lib/public-links';
+import {
+  getPublicLinks,
+  openPublicLink,
+  type PublicLinks,
+} from '../../src/lib/public-links';
 import { colors, radii, spacing } from '../../src/theme/tokens';
 
 type LinkRowProps = { label: string; url: string | null };
@@ -30,8 +34,9 @@ function LinkRow({ label, url }: LinkRowProps) {
   );
 }
 
-export default function AboutRoute() {
-  const links = getPublicLinks();
+type AboutScreenProps = { links: PublicLinks };
+
+export function AboutScreen({ links }: AboutScreenProps) {
   const version = Constants.expoConfig?.version ?? 'Bilinmiyor';
   return (
     <SafeAreaView style={styles.screen}>
@@ -59,6 +64,10 @@ export default function AboutRoute() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+export default function AboutRoute() {
+  return <AboutScreen links={getPublicLinks()} />;
 }
 
 const styles = StyleSheet.create({

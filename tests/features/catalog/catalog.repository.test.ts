@@ -71,6 +71,14 @@ describe('catalog repository', () => {
     } as never);
 
     await expect(repository.getAppBySlug('missing')).resolves.toBeNull();
+    expect(query.order).toHaveBeenNthCalledWith(1, 'version_code', {
+      ascending: false,
+      referencedTable: 'versions',
+    });
+    expect(query.order).toHaveBeenNthCalledWith(2, 'position', {
+      ascending: true,
+      referencedTable: 'screenshots',
+    });
   });
 
   it('returns null for PostgREST no-row errors and throws other failures', async () => {

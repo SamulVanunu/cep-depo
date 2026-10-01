@@ -62,4 +62,11 @@ describe('openApkDownload', () => {
     expect(deps.warn).toHaveBeenCalledWith('İndirme metriği kaydedilemedi.');
     expect(deps.warn).not.toHaveBeenCalledWith(expect.stringContaining('secret backend detail'));
   });
+
+  it('reports a deduplicated metric as not newly recorded', async () => {
+    const deps = dependencies({ recordDownload: jest.fn(async () => false) });
+
+    await expect(openApkDownload(input, deps)).resolves.toEqual({ metricsRecorded: false });
+    expect(deps.warn).not.toHaveBeenCalled();
+  });
 });

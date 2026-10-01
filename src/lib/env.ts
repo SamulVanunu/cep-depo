@@ -6,6 +6,7 @@ export type PublicEnv = {
 type EnvironmentSource = Readonly<Record<string, string | undefined>>;
 
 const CONFIGURATION_ERROR = 'Supabase yapılandırması eksik veya geçersiz.';
+const publishableKeyPattern = /^sb_publishable_[A-Za-z0-9_-]+$/;
 
 function defaultEnvironment(): EnvironmentSource {
   return {
@@ -19,7 +20,7 @@ export function getPublicEnv(source: EnvironmentSource = defaultEnvironment()): 
   const rawUrl = source.EXPO_PUBLIC_SUPABASE_URL?.trim();
   const publishableKey = source.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
 
-  if (!rawUrl || !publishableKey) {
+  if (!rawUrl || !publishableKey || !publishableKeyPattern.test(publishableKey)) {
     throw new Error(CONFIGURATION_ERROR);
   }
 

@@ -52,8 +52,8 @@ export async function openApkDownload(
 
   try {
     const installationId = await dependencies.getInstallationId();
-    await dependencies.recordDownload(input.versionId, installationId);
-    return { metricsRecorded: true };
+    const metricsRecorded = await dependencies.recordDownload(input.versionId, installationId);
+    return { metricsRecorded };
   } catch {
     dependencies.warn('İndirme metriği kaydedilemedi.');
     return { metricsRecorded: false };
