@@ -5,9 +5,9 @@ import { colors, radii, spacing } from '../../theme/tokens';
 import { AppIcon } from './AppIcon';
 import { AppText } from './AppText';
 
-type AppCardProps = { app: CatalogCard; onPress: (app: CatalogCard) => void };
+type AppCardProps = { app: CatalogCard; iconUri?: string | null; onPress: (app: CatalogCard) => void };
 
-export function AppCard({ app, onPress }: AppCardProps) {
+export function AppCard({ app, iconUri, onPress }: AppCardProps) {
   return (
     <Pressable
       accessibilityLabel={`${app.title}, ${app.category.name}, sürüm ${app.currentVersion.name}`}
@@ -15,7 +15,7 @@ export function AppCard({ app, onPress }: AppCardProps) {
       onPress={() => onPress(app)}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
-      <AppIcon title={app.title} uri={app.iconPath} />
+      <AppIcon title={app.title} uri={iconUri} />
       <View style={styles.content}>
         <View style={styles.heading}>
           <AppText variant="label" numberOfLines={1} style={styles.title}>{app.title}</AppText>

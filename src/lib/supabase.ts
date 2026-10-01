@@ -21,3 +21,7 @@ export function getSupabaseClient(): SupabaseClient<Database> {
   });
   return client;
 }
+
+export function getPublicAssetUrl(path: string): string {
+  return getSupabaseClient().storage.from('app-assets').getPublicUrl(path).data.publicUrl;
+}

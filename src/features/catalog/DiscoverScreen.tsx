@@ -16,6 +16,7 @@ import { AppCard } from '../../components/ui/AppCard';
 import { AppText } from '../../components/ui/AppText';
 import { CategoryChip } from '../../components/ui/CategoryChip';
 import { ScreenState } from '../../components/ui/ScreenState';
+import { getPublicAssetUrl } from '../../lib/supabase';
 import { colors, radii, spacing } from '../../theme/tokens';
 import { catalogKeys, useCatalogApps, useCategories } from './catalog.queries';
 import type { CatalogCard, Category } from './catalog.types';
@@ -116,7 +117,11 @@ export function DiscoverScreen() {
       {featuredApp ? (
         <View style={styles.featured}>
           <AppText tone="accent" variant="label" style={styles.sectionLabel}>EDİTÖRÜN SEÇİMİ</AppText>
-          <AppCard app={featuredApp} onPress={openApp} />
+          <AppCard
+            app={featuredApp}
+            iconUri={featuredApp.iconPath ? getPublicAssetUrl(featuredApp.iconPath) : null}
+            onPress={openApp}
+          />
         </View>
       ) : null}
       {listedApps.length > 0 ? <AppText variant="title" style={styles.sectionTitle}>Uygulamalar</AppText> : null}
@@ -170,7 +175,13 @@ export function DiscoverScreen() {
             tintColor={colors.accent}
           />
         }
-        renderItem={({ item }) => <AppCard app={item} onPress={openApp} />}
+        renderItem={({ item }) => (
+          <AppCard
+            app={item}
+            iconUri={item.iconPath ? getPublicAssetUrl(item.iconPath) : null}
+            onPress={openApp}
+          />
+        )}
         testID="catalog-list"
       />
     </SafeAreaView>
