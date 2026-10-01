@@ -1,1 +1,4 @@
-// Shared test setup belongs here when a cross-suite behavior requires it.
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);

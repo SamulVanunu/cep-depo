@@ -1,0 +1,326 @@
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
+export type Database = {
+  
+  "graphql_public": {
+          Tables: {
+            [_ in never]: never
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "graphql":
+{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
+          Tables: {
+            "app_screenshots": {
+                  Row: {
+                    "alt_text": string,"app_id": string,"created_at": string,"id": string,"path": string,"position": number
+                  }
+                  Insert: {
+                    "alt_text": string,"app_id": string,"created_at"?: string,"id"?: string,"path": string,"position"?: number
+                  }
+                  Update: {
+                    "alt_text"?: string,"app_id"?: string,"created_at"?: string,"id"?: string,"path"?: string,"position"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "app_screenshots_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "apps"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "app_screenshots_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "catalog_app_cards"
+      referencedColumns: ["app_id"]
+    }
+                  ]
+                },"app_versions": {
+                  Row: {
+                    "apk_path": string,"apk_size_bytes": number,"app_id": string,"changelog": string,"created_at": string,"created_by": string | null,"id": string,"published_at": string | null,"sha256": string,"status": Database["public"]['Enums']["version_status"],"version_code": number,"version_name": string
+                  }
+                  Insert: {
+                    "apk_path": string,"apk_size_bytes": number,"app_id": string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"published_at"?: string | null,"sha256": string,"status"?: Database["public"]['Enums']["version_status"],"version_code": number,"version_name": string
+                  }
+                  Update: {
+                    "apk_path"?: string,"apk_size_bytes"?: number,"app_id"?: string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"published_at"?: string | null,"sha256"?: string,"status"?: Database["public"]['Enums']["version_status"],"version_code"?: number,"version_name"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "app_versions_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "apps"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "app_versions_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "catalog_app_cards"
+      referencedColumns: ["app_id"]
+    }
+                  ]
+                },"apps": {
+                  Row: {
+                    "category_id": string,"created_at": string,"description": string,"download_count": number,"featured": boolean,"icon_path": string | null,"id": string,"short_description": string,"slug": string,"status": Database["public"]['Enums']["app_status"],"title": string,"updated_at": string
+                  }
+                  Insert: {
+                    "category_id": string,"created_at"?: string,"description": string,"download_count"?: number,"featured"?: boolean,"icon_path"?: string | null,"id"?: string,"short_description": string,"slug": string,"status"?: Database["public"]['Enums']["app_status"],"title": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "category_id"?: string,"created_at"?: string,"description"?: string,"download_count"?: number,"featured"?: boolean,"icon_path"?: string | null,"id"?: string,"short_description"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["app_status"],"title"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "apps_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: false
+      referencedRelation: "catalog_app_cards"
+      referencedColumns: ["category_id"]
+    },{
+      foreignKeyName: "apps_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: false
+      referencedRelation: "categories"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"categories": {
+                  Row: {
+                    "created_at": string,"id": string,"is_active": boolean,"name": string,"position": number,"slug": string,"updated_at": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name": string,"position"?: number,"slug": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"position"?: number,"slug"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"download_events": {
+                  Row: {
+                    "app_id": string,"downloaded_at": string,"id": number,"installation_id": string,"version_id": string
+                  }
+                  Insert: {
+                    "app_id": string,"downloaded_at"?: string,"id"?: never,"installation_id": string,"version_id": string
+                  }
+                  Update: {
+                    "app_id"?: string,"downloaded_at"?: string,"id"?: never,"installation_id"?: string,"version_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "download_events_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "apps"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "download_events_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "catalog_app_cards"
+      referencedColumns: ["app_id"]
+    },{
+      foreignKeyName: "download_events_version_app_fkey"
+      columns: ["version_id","app_id"]
+isOneToOne: false
+      referencedRelation: "app_versions"
+      referencedColumns: ["id","app_id"]
+    }
+                  ]
+                },"user_roles": {
+                  Row: {
+                    "created_at": string,"role": Database["public"]['Enums']["app_role"],"user_id": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"role": Database["public"]['Enums']["app_role"],"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"role"?: Database["public"]['Enums']["app_role"],"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                }
+          }
+          Views: {
+            "catalog_app_cards": {
+                  Row: {
+                    "apk_path": string | null,"apk_size_bytes": number | null,"app_id": string | null,"category_id": string | null,"category_name": string | null,"category_slug": string | null,"download_count": number | null,"featured": boolean | null,"icon_path": string | null,"published_at": string | null,"sha256": string | null,"short_description": string | null,"slug": string | null,"title": string | null,"version_changelog": string | null,"version_code": number | null,"version_id": string | null,"version_name": string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                }
+          }
+          Functions: {
+            "record_download":
+{ Args: { "p_installation_id": string,"p_version_id": string }; Returns: boolean
+                           },
+"search_catalog":
+{ Args: { "p_category_slug": string,"p_query": string,"p_sort": string }; Returns: {
+              "apk_path": string | null,
+"apk_size_bytes": number | null,
+"app_id": string | null,
+"category_id": string | null,
+"category_name": string | null,
+"category_slug": string | null,
+"download_count": number | null,
+"featured": boolean | null,
+"icon_path": string | null,
+"published_at": string | null,
+"sha256": string | null,
+"short_description": string | null,
+"slug": string | null,
+"title": string | null,
+"version_changelog": string | null,
+"version_code": number | null,
+"version_id": string | null,
+"version_name": string | null
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "catalog_app_cards"
+        isOneToOne: false
+        isSetofReturn: true
+      } }
+          }
+          Enums: {
+            "app_role": "admin","app_status": "active"|"archived","version_status": "draft"|"published"|"withdrawn"
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        }
+}
+
+type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
+
+export const Constants = {
+  "graphql_public": {
+          Enums: {
+            
+          }
+        },"public": {
+          Enums: {
+            "app_role": ["admin"],"app_status": ["active", "archived"],"version_status": ["draft", "published", "withdrawn"]
+          }
+        }
+} as const
