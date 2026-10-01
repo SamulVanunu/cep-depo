@@ -9,3 +9,4 @@ node_modules/
 *.keystore
 credentials.json
 .superpowers/
+.worktrees/
