@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { type ReactNode, useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppIcon } from '../../components/ui/AppIcon';
@@ -10,6 +10,12 @@ import { Button } from '../../components/ui/Button';
 import { ScreenState } from '../../components/ui/ScreenState';
 import { getPublicAssetUrl } from '../../lib/supabase';
 import { colors, radii, spacing } from '../../theme/tokens';
+import { getDownloadAction } from '../downloads/download-history';
+import {
+  defaultDownloadDependencies,
+  openApkDownload,
+} from '../downloads/open-apk-download';
+import { useDownloadedVersion } from '../downloads/useDownloadedVersion';
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { VersionHistory } from './VersionHistory';
 import { useCatalogApp } from './catalog.queries';
@@ -33,6 +39,9 @@ export function AppDetailScreen({
   const router = useRouter();
   const normalizedSlug = slug.trim();
   const query = useCatalogApp(normalizedSlug);
+  const downloadHistory = useDownloadedVersion(query.data?.id ?? null);
+  const [openingDownload, setOpeningDownload] = useState(false);
+  const openingDownloadRef = useRef(false);
 
   if (!normalizedSlug || (!query.isPending && !query.isError && !query.data)) {
     return (
@@ -63,6 +72,40 @@ export function AppDetailScreen({
 
   const app = query.data;
   const iconUri = app.iconPath ? resolveAssetUrl(app.iconPath) : null;
+  const downloadAction = getDownloadAction(
+    app.currentVersion.code,
+    downloadHistory.downloadedVersion,
+  );
+
+  async function startDownload() {
+    if (openingDownloadRef.current) return;
+    openingDownloadRef.current = true;
+    setOpeningDownload(true);
+    try {
+      await openApkDownload(
+        {
+          appId: app.id,
+          versionId: app.currentVersion.id,
+          versionCode: app.currentVersion.code,
+          apkPath: app.currentVersion.apkPath,
+        },
+        defaultDownloadDependencies,
+      );
+      await downloadHistory.refresh();
+    } catch {
+      Alert.alert(
+        'İndirme başlatılamadı.',
+        'APK adresi açılamadı. Bağlantını kontrol edip yeniden deneyebilirsin.',
+        [
+          { text: 'Vazgeç', style: 'cancel' },
+          { text: 'Tekrar dene', onPress: () => void startDownload() },
+        ],
+      );
+    } finally {
+      openingDownloadRef.current = false;
+      setOpeningDownload(false);
+    }
+  }
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -89,7 +132,22 @@ export function AppDetailScreen({
           </View>
         </View>
 
-        {renderDownloadAction ? <View style={styles.download}>{renderDownloadAction(app)}</View> : null}
+        <View style={styles.download}>
+          {renderDownloadAction ? (
+            renderDownloadAction(app)
+          ) : (
+            <>
+              <Button
+                label={downloadAction === 'update' ? 'GÜNCELLE' : 'APK İNDİR'}
+                loading={openingDownload}
+                onPress={() => void startDownload()}
+              />
+              <AppText tone="subtle" variant="label" style={styles.downloadNote}>
+                İndirme, kurulumun tamamlandığı anlamına gelmez.
+              </AppText>
+            </>
+          )}
+        </View>
 
         <AppText variant="title" style={styles.sectionTitle}>Hakkında</AppText>
         <AppText tone="muted">{app.description}</AppText>
@@ -122,6 +180,7 @@ const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg },
   heroText: { flex: 1, marginLeft: spacing.lg, gap: spacing.xs },
   download: { marginTop: spacing.xl },
+  downloadNote: { marginTop: spacing.sm, textAlign: 'center' },
   sectionTitle: { marginTop: spacing.xxl, marginBottom: spacing.md },
   hashCard: { marginTop: spacing.xl, padding: spacing.md, borderRadius: radii.md, backgroundColor: colors.surface },
   hash: { marginTop: spacing.sm, fontFamily: 'monospace', fontSize: 12 },

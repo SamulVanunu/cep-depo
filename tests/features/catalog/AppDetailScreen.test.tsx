@@ -1,8 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 import { AppDetailScreen } from '../../../src/features/catalog/AppDetailScreen';
 import { useCatalogApp } from '../../../src/features/catalog/catalog.queries';
 import type { CatalogApp } from '../../../src/features/catalog/catalog.types';
+import { openApkDownload } from '../../../src/features/downloads/open-apk-download';
+import { useDownloadedVersion } from '../../../src/features/downloads/useDownloadedVersion';
 
 const mockBack = jest.fn();
 
@@ -12,6 +15,14 @@ jest.mock('expo-router', () => ({
 
 jest.mock('../../../src/features/catalog/catalog.queries', () => ({
   useCatalogApp: jest.fn(),
+}));
+
+jest.mock('../../../src/features/downloads/open-apk-download', () => ({
+  openApkDownload: jest.fn(),
+}));
+
+jest.mock('../../../src/features/downloads/useDownloadedVersion', () => ({
+  useDownloadedVersion: jest.fn(),
 }));
 
 const app: CatalogApp = {
@@ -64,6 +75,8 @@ const app: CatalogApp = {
 };
 
 const mockUseCatalogApp = useCatalogApp as jest.MockedFunction<typeof useCatalogApp>;
+const mockOpenApkDownload = openApkDownload as jest.MockedFunction<typeof openApkDownload>;
+const mockUseDownloadedVersion = useDownloadedVersion as jest.MockedFunction<typeof useDownloadedVersion>;
 
 function queryResult(overrides: Record<string, unknown>) {
   return {
@@ -77,7 +90,11 @@ function queryResult(overrides: Record<string, unknown>) {
 }
 
 describe('AppDetailScreen', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseDownloadedVersion.mockReturnValue({ downloadedVersion: undefined, refresh: jest.fn() });
+    mockOpenApkDownload.mockResolvedValue({ metricsRecorded: true });
+  });
 
   it('renders icon, description, ordered screenshots and descending published versions', () => {
     mockUseCatalogApp.mockReturnValue(queryResult({ data: app }));
@@ -123,5 +140,28 @@ describe('AppDetailScreen', () => {
 
     expect(mockUseCatalogApp).toHaveBeenCalledWith('');
     expect(screen.getByText('Uygulama bulunamadı.')).toBeTruthy();
+  });
+
+  it('shows update only for an older locally opened version', () => {
+    mockUseCatalogApp.mockReturnValue(queryResult({ data: app }));
+    mockUseDownloadedVersion.mockReturnValue({ downloadedVersion: 11, refresh: jest.fn() });
+    render(<AppDetailScreen resolveAssetUrl={path => path} slug="cep-iptv" />);
+
+    expect(screen.getByRole('button', { name: 'GÜNCELLE' })).toBeTruthy();
+    expect(screen.getByText('İndirme, kurulumun tamamlandığı anlamına gelmez.')).toBeTruthy();
+  });
+
+  it('surfaces URL-open failures with a Turkish retry action', async () => {
+    mockUseCatalogApp.mockReturnValue(queryResult({ data: app }));
+    mockOpenApkDownload.mockRejectedValue(new Error('blocked'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    render(<AppDetailScreen resolveAssetUrl={path => path} slug="cep-iptv" />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'APK İNDİR' }));
+
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
+    const buttons = alert.mock.calls[0]?.[2];
+    expect(alert.mock.calls[0]?.[0]).toBe('İndirme başlatılamadı.');
+    expect(buttons?.map(button => button.text)).toContain('Tekrar dene');
   });
 });
