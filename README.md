@@ -1,45 +1,114 @@
-# Cep Depo — Android APK kataloğu
+# Cep Depo
 
-Kullanıcılar APK kayıtlarını inceleyip yayıncının kullandığı servisteki indirme bağlantısını açar. İndirme için Cep Depo hesabı gerekmez; yorum ve puan için hesap gerekir. Yayınlama, yeni sürüm ve kaldırma yalnızca yönetici hesabındadır. IPTV uygulamaları için kategori bulunur. Harici hesap isteyen uygulamalarda hesap isteme bağlantısı gösterilebilir.
+Cep Depo, bağımsız Android uygulamalarını keşfetmek ve yayımlanmış APK dosyalarını hesap açmadan indirmek için geliştirilen Expo/React Native kataloğudur. Bu teslimat; anonim katalog, arama, kategoriler, uygulama detayı, sürüm geçmişi ve güvenli indirme açma akışını içerir.
 
-## İlk kurulum
+## Gereksinimler
 
-1. `npm install` çalıştır. `.env.example` dosyasını `.env` olarak kopyalayıp Project URL ve publishable key değerlerini doldur. Secret/service role anahtarını uygulamaya koyma.
-2. Supabase SQL Editor içinde `supabase/schema.sql` dosyasını çalıştır. Bu şema mevcut projede zaten kuruluysa yeniden çalıştırma.
-3. Supabase Authentication içinde kendi hesabını oluştur. Hesabının UUID değerini `public.admins` tablosuna ekle: `insert into public.admins(user_id) values ('UUID') on conflict do nothing;`.
-4. `npm start` ile Expo Go'da aç.
+- Node.js 22
+- npm 10
+- Docker Engine veya Docker Desktop
+- Android geliştirme için Android Studio/emülatör ya da fiziksel cihaz
+- Dağıtım için Expo ve EAS hesabı
+- Mobil uygulama için HTTPS adresli bir Supabase projesi
 
-## Mevcut projeyi güncelleme
+## Kurulum
 
-Mevcut Supabase projesinde sırasıyla `supabase/link_source_migration.sql` ve `supabase/release_events_migration.sql` dosyalarını SQL Editor'da çalıştır. Ardından güncel `App.tsx`, `src/api.ts`, `assets` ve `package.json`/`package-lock.json` dosyalarını kullanıp `npm install` çalıştır. `.env` dosyanı koru.
+```bash
+npm install
+cp .env.example .env
+```
 
-## İndirme ve sürüm takibi
+`.env` içinde aşağıdaki public değerleri doldurun:
 
-Yönetim ekranında HTTPS indirme bağlantısı ve sürüm yayınlanır. Kullanıcı `APK indir` düğmesine bastığında dış servis açılır. TeraBox gibi bir paylaşım sayfasında dosyayı indirme adımını servis yönetir; Cep Depo servis sayfasını doğrudan APK dosyasına dönüştüremez.
+```dotenv
+EXPO_PUBLIC_SUPABASE_URL=https://PROJECT_REF.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+EXPO_PUBLIC_PRIVACY_URL=https://example.com/privacy
+EXPO_PUBLIC_TERMS_URL=https://example.com/terms
+EXPO_PUBLIC_CONTACT_URL=mailto:support@example.com
+```
 
-Geçmiş, bağlantısı açılan uygulamaların sürümünü yalnızca bu cihazda tutar. Dosyanın indirildiğini veya kurulduğunu doğrulamaz. Yeni sürümde sürüm numarasını değiştirmen gerekir. Yayınlar ve yeni sürümler uygulama içindeki Bildirimler alanında, uygulama açıldığında ya da ön plana geldiğinde görünür. Bu sürümde telefonun durum çubuğuna uygulama kapalıyken **push bildirim gönderilmez**. Android Expo Go SDK 57 push bildirim desteklemez; bunun için özel Android derlemesi ve sunucu bildirim altyapısı gerekir.
+Supabase publishable/anon anahtarları istemcide kullanılmak üzere public değerlerdir; güvenlik RLS ve sınırlı grant'lerle sağlanır. **Service-role, secret key, veritabanı parolası veya başka bir ayrıcalıklı anahtarı mobil uygulamaya ya da `EXPO_PUBLIC_*` değişkenlerine eklemeyin.**
 
-## Uygulama hataları
+Gizlilik ve kullanım koşulları yalnız HTTPS kabul eder. İletişim değeri HTTPS veya `mailto:` olabilir. Eksik veya geçersiz bağlantılar uygulamada `Yapılandırılmadı` olarak görünür.
 
-Ekran çizilirken beklenmeyen bir hata olursa kullanıcıya yeniden deneme ekranı gösterilir. Bozuk yerel geçmiş verisi sıfırlanır. Bu koruma Android'in kendi içinde kapanan uygulamayı, bellek yetersizliğini veya ağ bağlantısı hatalarını otomatik çözmez. Yayınlamadan önce farklı Android cihazlarda gerçek APK derlemesini dene. Bir kapanma tekrarlanıyorsa cihaz modeli, Android sürümü ve kapanma adımlarını kaydet; üretim ortamı için ayrıca hata raporlama servisi kurmak gerekir. Expo Go testi gerçek APK davranışını garanti etmez.
+## Yerel Supabase
 
-## Android APK yayınlama
+Yerel veritabanı şema geliştirme ve test içindir. Mobil uygulama yapılandırması HTTPS Supabase proje adresi bekler.
 
-Bu proje doğrudan bağlantıyla dağıtılacak Android APK için `release` profili içerir. APK üretmek için Expo hesabı ve uygulamanın bağlı olduğu Supabase projesinin **Project URL** ile **publishable/anon key** değerleri gerekir. `.env.example` içindeki örnek değerlerle yayınlama yapma. **Service role/secret key** ekleme.
+```bash
+npm run db:start
+npm run db:reset
+npm run db:test
+npm run db:types
+```
 
-1. Proje klasöründe `npm install` ve `npx eas-cli login` çalıştır.
-2. İlk derlemede `npx eas-cli build:configure` ile projeyi kendi Expo hesabına bağla. `app.json` ve `eas.json` içindeki mevcut Android ayarlarını koru.
-3. Expo projenin ortam değişkenleri ekranında **production** ortamına `EXPO_PUBLIC_SUPABASE_URL` ve `EXPO_PUBLIC_SUPABASE_ANON_KEY` değerlerini ekle. Bunlar derlemenin içine gömülür; Supabase RLS kuralları açık olmalı.
-4. `npx eas-cli build --platform android --profile release` çalıştır. Sorulduğunda Android imzalama anahtarını EAS'ın oluşturmasına izin ver ve anahtar yönetimini aynı Expo hesabında sürdür. Biten derlemenin APK bağlantısını önce kendi cihazında dene, sonra paylaş.
-5. Sonraki APK sürümünde `app.json` içindeki `version` ve `android.versionCode` değerlerini artır. Aynı paket adı ve imzalama anahtarı korunmazsa kullanıcı mevcut uygulamanın üzerine güncelleme kuramaz.
+- Canonical migration'lar `supabase/migrations/` altındadır.
+- `npm run db:reset`, migration'ları temiz veritabanına uygular ve `supabase/seed.sql` verisini yükler.
+- `npm run db:test`, anonim erişim, RLS, Storage sınırları, arama ve indirme metriği pgTAP testlerini çalıştırır.
+- `npm run db:types`, yerel şemadan `src/types/database.types.ts` üretir. Şema değişikliğinden sonra bu dosyayı yeniden üretin.
 
-Bu profil APK üretir; Google Play yüklemesi için AAB ve mağaza süreçleri ayrıca gerekir. Expo Go veya JavaScript dışa aktarımı kurulabilir APK değildir. Bu pakette Supabase bilgileri bulunmadığından burada işlevsel APK üretilmedi.
+Hosted projeye migration uygulamadan önce Supabase CLI ile doğru project ref'i bağlayın ve değişiklikleri inceleyin:
 
-## Başkaları için GitHub'da yayınlama
+```bash
+npx supabase link --project-ref PROJECT_REF
+npx supabase db push
+```
 
-1. GitHub'da herkese açık bir `cep-depo` deposu oluştur ve **proje klasörünün içindekileri** depoya yükle. `.env`, imzalama anahtarı, `node_modules` ve APK dosyasını kaynak kod deposuna ekleme. Kaynak kodunu açık lisansla paylaşmak istiyorsan ayrıca seçtiğin lisansı ekle.
-2. Yukarıdaki adımlarla `release` profili kullanarak APK oluştur. Expo derleme sayfasından APK'yı indir, kendi telefonunda kur ve katalog, giriş, indirme bağlantıları ile yönetici erişimini gerçek APK üzerinde doğrula.
-3. GitHub deposunda **Releases → Draft a new release** aç. Etiket olarak `v0.1.0` yaz, derlediğin APK'yı **Assets** alanına yükle; örneğin `cep-depo-v0.1.0.apk`. Ardından sürümü yayımla ve insanlarla **Release bağlantısını** paylaş. GitHub'ın otomatik oluşturduğu “Source code (zip)” uygulama değildir.
-4. Yeni sürüm çıkarırken `version` ve `android.versionCode` değerlerini artırıp **aynı Expo projesinin aynı Android imzalama anahtarını** kullan. Yeni etiket ve yeni APK ile yeni Release oluştur. APK dosyasını GitHub deposuna commit etme.
+## Geliştirme
 
-**Önemli:** Bu sürümde yalnızca APK bağlantısını GitHub'a koymak, Cep Depo'nun kullanıcı telefonlarına otomatik uygulama güncellemesi bildirmesini sağlamaz. Şu anki “Güncelle” düğmesi katalogdaki uygulamalar içindir; Cep Depo'nun kendisi için değildir. Yeni Cep Depo sürümünü ayrıca duyurman gerekir.
+```bash
+npm start
+```
+
+Ardından Expo geliştirme ekranından Android emülatörü veya cihazı açın. Yapılandırma değişikliklerinden sonra Metro önbelleğini temizlemek için `npx expo start --clear` kullanabilirsiniz.
+
+Kalite kontrolleri:
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run db:test
+npx expo-doctor
+```
+
+## APK indirme davranışı
+
+- APK URL'si yalnız Supabase'in public `apks` bucket'ından oluşturulur ve HTTPS değilse açılmaz.
+- Platform URL'yi başarıyla açmadan yerel geçmiş veya indirme metriği yazılmaz.
+- Yerel geçmiş, açılan en yüksek `version_code` değerini bu cihazda saklar.
+- `GÜNCELLE`, yalnız katalogdaki sürüm kodu yerel geçmişten büyük olduğunda görünür.
+- URL'nin açılması dosyanın indirildiğini veya kurulduğunu kanıtlamaz; uygulama bu konuda iddiada bulunmaz.
+- Anonim metrik, installation UUID + sürüm için idempotenttir ve kullanıcı hesabı gerektirmez.
+
+## Android APK derleme
+
+`eas.json` içindeki `release` profili internal dağıtım için APK üretir.
+
+```bash
+npx eas-cli login
+npx eas-cli build:configure
+npx eas-cli build --platform android --profile release
+```
+
+EAS `production` ortamına `.env.example` içindeki gerekli `EXPO_PUBLIC_*` değerlerini ekleyin. Service-role/secret key eklemeyin. İlk üretim derlemesinde oluşturulan Android imzalama anahtarını ve `com.cepdepo.app` paket adını sonraki sürümlerde koruyun. Her sürümde `app.json` içindeki `version` ve `android.versionCode` değerlerini artırın.
+
+JavaScript export'u kurulabilir APK değildir. Yerel Android bundle doğrulaması için:
+
+```bash
+npx expo export --platform android
+```
+
+## Bu teslimatın kapsamı
+
+Mevcut foundation teslimatı şunları içerir:
+
+- dört sekmeli Expo Router kabuğu;
+- anonim keşfetme, arama, kategori ve sıralama;
+- uygulama detayı, ekran görüntüleri ve yayımlanmış sürüm geçmişi;
+- HTTPS APK açma, cihaz içi sürüm geçmişi ve anonim metrik;
+- yapılandırma hatası, loading, empty, error ve retry durumları;
+- Supabase migration, seed, RLS ve pgTAP testleri.
+
+Hesap/auth, yorumlar, puanlama, raporlama, takip, gerçek push bildirimleri, Next.js yönetim paneli, yayınlama iş akışı ve bütünlük sertleştirmesi sonraki teslimat planlarındadır. Hesap ve Bildirim sekmeleri bu nedenle işlev varmış gibi davranmaz.

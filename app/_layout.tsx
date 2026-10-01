@@ -1,9 +1,15 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
-import { AppProviders } from '../src/app/AppProviders';
+import { AppProviders } from '../src/providers/AppProviders';
 import { ConfigurationErrorScreen } from '../src/components/ui/ConfigurationErrorScreen';
+import { BootstrapGate } from '../src/features/bootstrap/BootstrapGate';
 import { getPublicEnv } from '../src/lib/env';
+import { getSupabaseClient } from '../src/lib/supabase';
+
+async function prepareStartup() {
+  await getSupabaseClient().auth.getSession();
+}
 
 export default function RootLayout() {
   try {
@@ -14,13 +20,15 @@ export default function RootLayout() {
 
   return (
     <AppProviders>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          contentStyle: { backgroundColor: '#111315' },
-          headerShown: false,
-        }}
-      />
+      <BootstrapGate startup={prepareStartup}>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            contentStyle: { backgroundColor: '#111315' },
+            headerShown: false,
+          }}
+        />
+      </BootstrapGate>
     </AppProviders>
   );
 }
