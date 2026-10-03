@@ -155,3 +155,65 @@ values
     'Radyo Cep istasyon listesi',
     0
   );
+
+insert into auth.users (
+  id,
+  instance_id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+values
+  (
+    'dddddddd-dddd-4ddd-8ddd-dddddddddd01',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'community-demo-a@example.test',
+    '',
+    '2026-10-01T10:00:00Z',
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"username":"demo_user_a"}'::jsonb,
+    '2026-10-01T10:00:00Z',
+    '2026-10-01T10:00:00Z'
+  ),
+  (
+    'dddddddd-dddd-4ddd-8ddd-dddddddddd02',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'community-demo-b@example.test',
+    '',
+    '2026-10-01T10:05:00Z',
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"username":"demo_user_b"}'::jsonb,
+    '2026-10-01T10:05:00Z',
+    '2026-10-01T10:05:00Z'
+  );
+
+insert into public.reviews (id, app_id, user_id, rating, body, created_at, updated_at)
+values
+  (
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+    'dddddddd-dddd-4ddd-8ddd-dddddddddd01',
+    5,
+    'Kurulumu kolay ve yayın listesi hızlı açılıyor.',
+    '2026-10-01T10:10:00Z',
+    '2026-10-01T10:10:00Z'
+  ),
+  (
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+    'dddddddd-dddd-4ddd-8ddd-dddddddddd02',
+    4,
+    'İstasyon listesi sade ve kullanışlı.',
+    '2026-10-01T10:15:00Z',
+    '2026-10-01T10:15:00Z'
+  );

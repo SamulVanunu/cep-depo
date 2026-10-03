@@ -2,7 +2,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
-  
+
   "graphql_public": {
           Tables: {
             [_ in never]: never
@@ -109,7 +109,7 @@ isOneToOne: false
                     "created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"position"?: number,"slug"?: string,"updated_at"?: string
                   }
                   Relationships: [
-                    
+
                   ]
                 },"download_events": {
                   Row: {
@@ -142,6 +142,87 @@ isOneToOne: false
       referencedColumns: ["id","app_id"]
     }
                   ]
+                },"profiles": {
+                  Row: {
+                    "avatar_path": string | null,"created_at": string,"status": Database["public"]['Enums']["profile_status"],"updated_at": string,"user_id": string,"username": string
+                  }
+                  Insert: {
+                    "avatar_path"?: string | null,"created_at"?: string,"status"?: Database["public"]['Enums']["profile_status"],"updated_at"?: string,"user_id": string,"username": string
+                  }
+                  Update: {
+                    "avatar_path"?: string | null,"created_at"?: string,"status"?: Database["public"]['Enums']["profile_status"],"updated_at"?: string,"user_id"?: string,"username"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"reports": {
+                  Row: {
+                    "admin_note": string | null,"app_id": string,"created_at": string,"description": string | null,"id": string,"reason": Database["public"]['Enums']["report_reason"],"reporter_id": string,"resolved_at": string | null,"status": Database["public"]['Enums']["report_status"],"version_id": string | null
+                  }
+                  Insert: {
+                    "admin_note"?: string | null,"app_id": string,"created_at"?: string,"description"?: string | null,"id"?: string,"reason": Database["public"]['Enums']["report_reason"],"reporter_id": string,"resolved_at"?: string | null,"status"?: Database["public"]['Enums']["report_status"],"version_id"?: string | null
+                  }
+                  Update: {
+                    "admin_note"?: string | null,"app_id"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"reason"?: Database["public"]['Enums']["report_reason"],"reporter_id"?: string,"resolved_at"?: string | null,"status"?: Database["public"]['Enums']["report_status"],"version_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reports_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "apps"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reports_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "catalog_app_cards"
+      referencedColumns: ["app_id"]
+    },{
+      foreignKeyName: "reports_reporter_id_fkey"
+      columns: ["reporter_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["user_id"]
+    },{
+      foreignKeyName: "reports_version_app_fkey"
+      columns: ["version_id","app_id"]
+isOneToOne: false
+      referencedRelation: "app_versions"
+      referencedColumns: ["id","app_id"]
+    }
+                  ]
+                },"reviews": {
+                  Row: {
+                    "app_id": string,"body": string | null,"created_at": string,"id": string,"moderation_status": Database["public"]['Enums']["review_moderation_status"],"rating": number,"updated_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "app_id": string,"body"?: string | null,"created_at"?: string,"id"?: string,"moderation_status"?: Database["public"]['Enums']["review_moderation_status"],"rating": number,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "app_id"?: string,"body"?: string | null,"created_at"?: string,"id"?: string,"moderation_status"?: Database["public"]['Enums']["review_moderation_status"],"rating"?: number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reviews_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "apps"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reviews_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "catalog_app_cards"
+      referencedColumns: ["app_id"]
+    },{
+      foreignKeyName: "reviews_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["user_id"]
+    }
+                  ]
                 },"user_roles": {
                   Row: {
                     "created_at": string,"role": Database["public"]['Enums']["app_role"],"user_id": string
@@ -153,7 +234,7 @@ isOneToOne: false
                     "created_at"?: string,"role"?: Database["public"]['Enums']["app_role"],"user_id"?: string
                   }
                   Relationships: [
-                    
+
                   ]
                 }
           }
@@ -163,7 +244,26 @@ isOneToOne: false
                     "apk_path": string | null,"apk_size_bytes": number | null,"app_id": string | null,"category_id": string | null,"category_name": string | null,"category_slug": string | null,"download_count": number | null,"featured": boolean | null,"icon_path": string | null,"published_at": string | null,"sha256": string | null,"short_description": string | null,"slug": string | null,"title": string | null,"version_changelog": string | null,"version_code": number | null,"version_id": string | null,"version_name": string | null
                   }
                   Relationships: [
-                    
+
+                  ]
+                },"review_rating_summaries": {
+                  Row: {
+                    "app_id": string | null,"average_rating": number | null,"review_count": number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reviews_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "apps"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reviews_app_id_fkey"
+      columns: ["app_id"]
+isOneToOne: false
+      referencedRelation: "catalog_app_cards"
+      referencedColumns: ["app_id"]
+    }
                   ]
                 }
           }
@@ -200,7 +300,7 @@ isOneToOne: false
       } }
           }
           Enums: {
-            "app_role": "admin","app_status": "active"|"archived","version_status": "draft"|"published"|"withdrawn"
+            "app_role": "admin","app_status": "active"|"archived","profile_status": "active"|"suspended","report_reason": "acilmiyor"|"link_bozuk"|"sahte_uygulama"|"diger","report_status": "open"|"resolved"|"dismissed","review_moderation_status": "visible"|"hidden","version_status": "draft"|"published"|"withdrawn"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -316,11 +416,11 @@ export type CompositeTypes<
 export const Constants = {
   "graphql_public": {
           Enums: {
-            
+
           }
         },"public": {
           Enums: {
-            "app_role": ["admin"],"app_status": ["active", "archived"],"version_status": ["draft", "published", "withdrawn"]
+            "app_role": ["admin"],"app_status": ["active", "archived"],"profile_status": ["active", "suspended"],"report_reason": ["acilmiyor", "link_bozuk", "sahte_uygulama", "diger"],"report_status": ["open", "resolved", "dismissed"],"review_moderation_status": ["visible", "hidden"],"version_status": ["draft", "published", "withdrawn"]
           }
         }
 } as const
