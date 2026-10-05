@@ -19,8 +19,8 @@ create table public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint profiles_username_format_check check (
-    username::text = btrim(username::text)
-    and username::text ~ '^[A-Za-z0-9](?:[A-Za-z0-9]|[._](?=[A-Za-z0-9])){1,28}[A-Za-z0-9]$'
+    char_length(username::text) between 3 and 30
+    and username::text ~ '^[A-Za-zÇĞİÖŞÜçğıöşü0-9]+(?:[._][A-Za-zÇĞİÖŞÜçğıöşü0-9]+)*$'
   ),
   constraint profiles_avatar_path_check check (
     avatar_path is null
@@ -44,7 +44,10 @@ create table public.reviews (
   constraint reviews_app_user_key unique (app_id, user_id),
   constraint reviews_body_check check (
     body is null
-    or (body = btrim(body) and char_length(body) between 3 and 2000)
+    or (
+      body = regexp_replace(body, '^[[:space:]]+|[[:space:]]+$', '', 'g')
+      and char_length(body) between 3 and 2000
+    )
   )
 );
 
@@ -65,7 +68,10 @@ create table public.reports (
     on delete cascade,
   constraint reports_description_check check (
     description is null
-    or (description = btrim(description) and char_length(description) between 3 and 1000)
+    or (
+      description = regexp_replace(description, '^[[:space:]]+|[[:space:]]+$', '', 'g')
+      and char_length(description) between 3 and 1000
+    )
   ),
   constraint reports_resolution_check check (
     (status = 'open' and resolved_at is null)
@@ -109,7 +115,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  new.body = nullif(btrim(new.body), '');
+  new.body = nullif(regexp_replace(new.body, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
 
   if tg_op = 'UPDATE' then
     new.updated_at = now();
@@ -126,8 +132,8 @@ security definer
 set search_path = ''
 as $$
 begin
-  new.description = nullif(btrim(new.description), '');
-  new.admin_note = nullif(btrim(new.admin_note), '');
+  new.description = nullif(regexp_replace(new.description, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
+  new.admin_note = nullif(regexp_replace(new.admin_note, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
   return new;
 end;
 $$;
@@ -159,7 +165,8 @@ begin
   requested_username = btrim(new.raw_user_meta_data->>'username');
 
   if requested_username is null
-    or requested_username !~ '^[A-Za-z0-9](?:[A-Za-z0-9]|[._](?=[A-Za-z0-9])){1,28}[A-Za-z0-9]$'
+    or char_length(requested_username) not between 3 and 30
+    or requested_username !~ '^[A-Za-zÇĞİÖŞÜçğıöşü0-9]+(?:[._][A-Za-zÇĞİÖŞÜçğıöşü0-9]+)*$'
   then
     raise exception using
       errcode = '23514',
