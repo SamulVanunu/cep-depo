@@ -11,14 +11,15 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 1 database foundation was committed as `70ca065 feat: add secure community database schema`.
 - Database review identified Turkish username validation and full-whitespace normalization defects.
 - The interrupted fix diff was preserved and completed inline.
+- Task 1 review fixes were committed as `bc37174 fix: harden community input validation` after explicit approval.
 
 ## Current uncommitted changes
 
-- `supabase/migrations/20261001144751_accounts_community.sql`
-  - exact Turkish-inclusive username regex with explicit 3–30 length;
-  - POSIX-whitespace normalization for review/report text.
-- `supabase/tests/accounts_community_functions.test.sql`
-  - Turkish username/boundary and whitespace normalization coverage.
+- Task 2 auth infrastructure:
+  - `src/features/auth/auth.types.ts`, `auth-context.ts`, `auth-links.ts`;
+  - `src/providers/AuthProvider.tsx` and `src/providers/AppProviders.tsx` wiring;
+  - initial/runtime auth deep-link handling in `app/_layout.tsx`;
+  - callback redaction and provider lifecycle tests.
 
 ## Verification
 
@@ -29,12 +30,15 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Jest: 14 suites, 54 tests passed.
 - `git diff --check`: passed.
 - No reset, push or deploy was performed during the inline takeover.
+- Task 2 targeted tests: 3 suites, 17 tests passed.
+- Task 2 full Jest suite: 16 suites, 68 tests passed.
+- Task 2 lint and typecheck: passed.
 
 ## Pending
 
-- Obtain explicit authorization before committing the two Task 1 review-fix files and this memory file.
-- After commit, record Task 1 complete in the SDD ledger and begin Task 2 auth lifecycle/provider/deep-link work.
-- Tasks 2–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
+- Obtain explicit authorization before committing Task 2 files and this memory update.
+- Record Task 2 complete in the ledger after its commit and completion-contract test.
+- Tasks 3–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
 
 ## Last blocker
 
@@ -42,4 +46,4 @@ OpenAI subagents repeatedly reached usage limits. Work switched from subagent-dr
 
 ## Recommended next action
 
-Commit the verified Task 1 review fixes after user authorization, then start Task 2 from its existing brief without repeating Task 1.
+Commit verified Task 2 after user authorization, then start Task 3 without repeating Tasks 1–2.
