@@ -1,3 +1,87 @@
+-- Preserve the pre-migration prototype schema without exposing archived rows
+-- through the Data API. These blocks are no-ops on clean installations.
+do $$
+begin
+  if to_regclass('public.legacy_reviews') is null
+    and to_regclass('public.reviews') is not null
+    and exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'reviews' and column_name = 'author_id'
+    )
+  then
+    alter table public.reviews rename to legacy_reviews;
+  end if;
+
+  if to_regclass('public.legacy_release_events') is null
+    and to_regclass('public.release_events') is not null
+  then
+    alter table public.release_events rename to legacy_release_events;
+  end if;
+
+  if to_regclass('public.legacy_admins') is null
+    and to_regclass('public.admins') is not null
+  then
+    alter table public.admins rename to legacy_admins;
+  end if;
+
+  if to_regclass('public.legacy_apps') is null
+    and to_regclass('public.apps') is not null
+    and exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'apps' and column_name = 'version'
+    )
+  then
+    alter table public.apps rename to legacy_apps;
+  end if;
+end;
+$$;
+
+do $$
+declare
+  archived_table text;
+begin
+  foreach archived_table in array array[
+    'legacy_admins',
+    'legacy_apps',
+    'legacy_release_events',
+    'legacy_reviews'
+  ]
+  loop
+    if to_regclass('public.' || archived_table) is not null then
+      execute format(
+        'revoke all on table public.%I from public, anon, authenticated, service_role',
+        archived_table
+      );
+      execute format(
+        'grant select on table public.%I to service_role',
+        archived_table
+      );
+    end if;
+  end loop;
+end;
+$$;
+
+do $$
+begin
+  if to_regprocedure('public.is_admin()') is not null
+    and to_regprocedure('public.legacy_is_admin()') is null
+  then
+    alter function public.is_admin() rename to legacy_is_admin;
+    revoke all on function public.legacy_is_admin() from public, anon, authenticated;
+  end if;
+
+  if to_regprocedure('public.record_app_release()') is not null
+    and to_regprocedure('public.legacy_record_app_release()') is null
+  then
+    alter function public.record_app_release() rename to legacy_record_app_release;
+    revoke all on function public.legacy_record_app_release() from public, anon, authenticated;
+  end if;
+end;
+$$;
+
+drop policy if exists "admin upload apks" on storage.objects;
+drop policy if exists "admin delete apks" on storage.objects;
+
 create extension if not exists citext with schema extensions;
 create extension if not exists unaccent with schema extensions;
 
@@ -330,7 +414,12 @@ values
     false,
     5242880,
     array['image/png', 'image/jpeg', 'image/webp']
-  );
+  )
+on conflict (id) do update
+set name = excluded.name,
+    public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
 
 create policy published_files_public_read
   on storage.objects

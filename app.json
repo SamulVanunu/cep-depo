@@ -3,13 +3,13 @@
     "name": "Cep Depo",
     "slug": "cep-depo",
     "scheme": "cepdepo",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "icon": "./assets/app-icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "android": {
       "package": "com.cepdepo.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#101216"
@@ -31,6 +31,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c3701d37-83cf-4dbb-9ada-8284bbe343cc"
+      }
+    },
+    "owner": "samuelvanunu34"
   }
 }
