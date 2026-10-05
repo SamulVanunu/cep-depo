@@ -20,15 +20,15 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 6 review data behavior was committed as `75f0756 feat: add ratings and reviews data layer`.
 - Review-body validation was aligned with the database’s optional 3–2000 contract in `cdb2ce2 fix: align review body validation with schema`.
 - Task 7 ratings/reviews UI was committed as `4098589 feat: add ratings and reviews interface`.
+- Task 8 app/version reporting was committed as `0e3a2cd feat: add app and version reporting`.
 
 ## Current uncommitted changes
 
-- Task 8 reporting flow:
-  - exact report reasons and optional 3–1000 description validation;
-  - exact app/version target lookups and immutable safe inserts;
-  - duplicate-open handling and target-scoped query cache;
-  - gated reusable report modal;
-  - loaded app-level and per-version report actions.
+- Task 9 release documentation:
+  - local Mailpit/auth callback guidance;
+  - hosted project-ref verification, migration list and dry-run checklist;
+  - redirect allow-list, production SMTP, avatar/RLS/no-secret requirements;
+  - current community scope, exclusions and direct APK prerequisites.
 
 ## Verification
 
@@ -63,12 +63,17 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 8 domain/UI targeted tests: 4 suites, 22 tests passed.
 - Task 8 full Jest suite: 33 suites, 188 tests passed.
 - Task 8 typecheck, lint and diff-check passed.
+- Task 9 full Jest: 33 suites, 188 tests passed.
+- Task 9 database pgTAP: 5 files, 82 tests passed; local advisors found no issues.
+- Task 9 typecheck, lint and Expo Doctor 21/21 passed.
+- Generated database types match after stripping the CLI’s trailing whitespace-only output.
+- `db:reset` was deliberately not run because the user explicitly prohibited resets; verification used the existing local schema.
 
 ## Pending
 
-- Commit Task 8 under standing authorization and record it complete.
-- Start Task 9 full regression, accessibility and release hardening.
-- Tasks 9–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
+- Commit Task 9 under standing authorization and record it complete.
+- Task 10 remains and requires explicit approval/credentials before hosted migration, SMTP configuration or EAS build.
+- No push, hosted deploy, migration push or APK build has been performed.
 
 ## Last blocker
 
@@ -76,4 +81,4 @@ OpenAI subagents repeatedly reached usage limits. Work switched from subagent-dr
 
 ## Recommended next action
 
-Commit verified Task 8, then start Task 9 without repeating Tasks 1–8.
+Commit verified Task 9, then inspect Task 10 and stop before any external action requiring approval.
