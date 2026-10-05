@@ -31,7 +31,10 @@ function normalizeDraft(draft: ReviewDraft): { rating: number; body: string | nu
     throw new Error('Puan 1 ile 5 arasında olmalıdır.');
   }
   const body = draft.body.trim();
-  if (body.length > 500) throw new Error('Yorum en fazla 500 karakter olabilir.');
+  if (body.length > 0 && body.length < 3) {
+    throw new Error('Yorum boş bırakılmalı veya en az 3 karakter olmalıdır.');
+  }
+  if (body.length > 2000) throw new Error('Yorum en fazla 2000 karakter olabilir.');
   return { rating: draft.rating, body: body || null };
 }
 

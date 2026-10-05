@@ -125,6 +125,37 @@ describe('ReviewRepository', () => {
     expect(mock.update).not.toHaveBeenCalled();
   });
 
+  it('accepts a trimmed 2000-character optional body', async () => {
+    const mock = createClient();
+    mock.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    const body = 'a'.repeat(2000);
+
+    await createReviewRepository(mock.client).saveMine('app-1', 'user-1', {
+      rating: 4,
+      body: ` ${body} `,
+    });
+
+    expect(mock.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ body }),
+    );
+  });
+
+  it.each([
+    ['ab', 'Yorum boş bırakılmalı veya en az 3 karakter olmalıdır.'],
+    ['a'.repeat(2001), 'Yorum en fazla 2000 karakter olabilir.'],
+  ])('rejects invalid non-empty body length', async (body, message) => {
+    const mock = createClient();
+
+    await expect(
+      createReviewRepository(mock.client).saveMine('app-1', 'user-1', {
+        rating: 4,
+        body,
+      }),
+    ).rejects.toThrow(message);
+    expect(mock.insert).not.toHaveBeenCalled();
+    expect(mock.update).not.toHaveBeenCalled();
+  });
+
   it.each([0, 6, 2.5] as const)('rejects rating %s before a write', async rating => {
     const mock = createClient();
 
