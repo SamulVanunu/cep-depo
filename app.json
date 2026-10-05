@@ -20,7 +20,14 @@
       "expo-router",
       "expo-status-bar",
       "expo-splash-screen",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cep Depo, profil fotoğrafı seçebilmeniz için fotoğraflarınıza erişir.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -29,3 +29,7 @@ export function getPublicAssetUrl(path: string): string {
 export function getPublicApkUrl(path: string): string {
   return getSupabaseClient().storage.from('apks').getPublicUrl(path).data.publicUrl;
 }
+
+export function getPublicAvatarUrl(path: string): string {
+  return getSupabaseClient().storage.from('avatars').getPublicUrl(path).data.publicUrl;
+}

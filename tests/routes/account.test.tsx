@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { User } from '@supabase/supabase-js';
+import { Text } from 'react-native';
 
-import { AccountScreen } from '../../app/(tabs)/account';
+import { AccountScreen, addAvatarRevision } from '../../app/(tabs)/account';
 import type { AuthState } from '../../src/features/auth/auth.types';
 
 const signedOut: AuthState = { status: 'signedOut', session: null, user: null };
@@ -19,6 +20,15 @@ function userFixture(emailConfirmedAt: string | null): User {
 }
 
 describe('Account route', () => {
+  it('cache-busts a deterministic public avatar URL after replacement', () => {
+    expect(addAvatarRevision('https://cdn.example/avatar.png', 3)).toBe(
+      'https://cdn.example/avatar.png?v=3',
+    );
+    expect(addAvatarRevision('https://cdn.example/avatar.png?download=1', 4)).toBe(
+      'https://cdn.example/avatar.png?download=1&v=4',
+    );
+  });
+
   it('shows a loading state while the persisted session resolves', () => {
     render(
       <AccountScreen
@@ -73,7 +83,7 @@ describe('Account route', () => {
     expect(onConfirmEmail).toHaveBeenCalledWith('user@example.com');
   });
 
-  it('shows the temporary signed-in profile shell for a confirmed account', () => {
+  it('renders the profile feature for a confirmed account', () => {
     const user = userFixture('2026-10-01T12:00:00Z');
     render(
       <AccountScreen
@@ -82,10 +92,11 @@ describe('Account route', () => {
         onForgotPassword={jest.fn()}
         onSignIn={jest.fn()}
         onSignUp={jest.fn()}
+        signedInContent={<Text>Profil yönetimi</Text>}
       />,
     );
 
-    expect(screen.getByText('user@example.com')).toBeTruthy();
-    expect(screen.getByText('Profil bilgileri yüklenmeye hazır.')).toBeTruthy();
+    expect(screen.getByText('Profil yönetimi')).toBeTruthy();
+    expect(screen.queryByText('Profil bilgileri yüklenmeye hazır.')).toBeNull();
   });
 });
