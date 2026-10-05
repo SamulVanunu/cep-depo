@@ -12,14 +12,15 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Database review identified Turkish username validation and full-whitespace normalization defects.
 - The interrupted fix diff was preserved and completed inline.
 - Task 1 review fixes were committed as `bc37174 fix: harden community input validation` after explicit approval.
+- Task 2 auth session/deep-link infrastructure was committed as `6fbfd57 feat: add mobile auth session infrastructure`.
 
 ## Current uncommitted changes
 
-- Task 2 auth infrastructure:
-  - `src/features/auth/auth.types.ts`, `auth-context.ts`, `auth-links.ts`;
-  - `src/providers/AuthProvider.tsx` and `src/providers/AppProviders.tsx` wiring;
-  - initial/runtime auth deep-link handling in `app/_layout.tsx`;
-  - callback redaction and provider lifecycle tests.
+- Task 3 auth domain behavior:
+  - pure username/email/password/confirmation validators;
+  - sanitized typed auth errors;
+  - Supabase signup, sign-in/out, resend, password reset/update and advisory username availability repository;
+  - validator/error/repository tests.
 
 ## Verification
 
@@ -33,12 +34,15 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 2 targeted tests: 3 suites, 17 tests passed.
 - Task 2 full Jest suite: 16 suites, 68 tests passed.
 - Task 2 lint and typecheck: passed.
+- Task 3 targeted tests: 2 suites, 23 tests passed.
+- Task 3 full Jest suite: 18 suites, 91 tests passed.
+- Task 3 lint, typecheck and diff-check: passed.
 
 ## Pending
 
-- Obtain explicit authorization before committing Task 2 files and this memory update.
-- Record Task 2 complete in the ledger after its commit and completion-contract test.
-- Tasks 3–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
+- Commit Task 3 under the user’s standing authorization for verified local feature-branch commits.
+- Record Task 3 complete and start Task 4 auth screens/routes.
+- Tasks 4–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
 
 ## Last blocker
 
@@ -46,4 +50,4 @@ OpenAI subagents repeatedly reached usage limits. Work switched from subagent-dr
 
 ## Recommended next action
 
-Commit verified Task 2 after user authorization, then start Task 3 without repeating Tasks 1–2.
+Commit verified Task 3, then start Task 4 without repeating Tasks 1–3.
