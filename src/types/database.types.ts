@@ -23,7 +23,20 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "app_screenshots": {
+            "admin_audit_logs": {
+                  Row: {
+                    "action": string,"actor_id": string,"created_at": string,"id": string,"metadata": NonNullable<Json>,"target_id": string,"target_type": string
+                  }
+                  Insert: {
+                    "action": string,"actor_id": string,"created_at"?: string,"id"?: string,"metadata"?: NonNullable<Json>,"target_id": string,"target_type": string
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string,"created_at"?: string,"id"?: string,"metadata"?: NonNullable<Json>,"target_id"?: string,"target_type"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"app_screenshots": {
                   Row: {
                     "alt_text": string,"app_id": string,"created_at": string,"id": string,"path": string,"position": number
                   }
@@ -268,7 +281,28 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "record_download":
+            "admin_close_report":
+{ Args: { "p_actor_id": string,"p_admin_note": string,"p_report_id": string,"p_status": Database["public"]['Enums']["report_status"] }; Returns: undefined
+                           },
+"admin_delete_hidden_review":
+{ Args: { "p_actor_id": string,"p_review_id": string }; Returns: undefined
+                           },
+"admin_publish_version":
+{ Args: { "p_actor_id": string,"p_version_id": string }; Returns: undefined
+                           },
+"admin_record_external_action":
+{ Args: { "p_action": string,"p_actor_id": string,"p_metadata"?: Json,"p_target_id": string,"p_target_type": string }; Returns: string
+                           },
+"admin_set_profile_status":
+{ Args: { "p_actor_id": string,"p_status": Database["public"]['Enums']["profile_status"],"p_user_id": string }; Returns: undefined
+                           },
+"admin_set_review_status":
+{ Args: { "p_actor_id": string,"p_review_id": string,"p_status": Database["public"]['Enums']["review_moderation_status"] }; Returns: undefined
+                           },
+"admin_withdraw_version":
+{ Args: { "p_actor_id": string,"p_version_id": string }; Returns: undefined
+                           },
+"record_download":
 { Args: { "p_installation_id": string,"p_version_id": string }; Returns: boolean
                            },
 "search_catalog":
