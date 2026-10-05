@@ -1,15 +1,17 @@
 import { StyleSheet, View } from 'react-native';
 
 import { AppText } from '../../components/ui/AppText';
+import { Button } from '../../components/ui/Button';
 import { colors, spacing } from '../../theme/tokens';
 import type { CatalogVersion } from './catalog.types';
 
 type VersionHistoryProps = {
   currentVersionId: string;
   versions: readonly CatalogVersion[];
+  onReport?: (version: CatalogVersion) => void;
 };
 
-export function VersionHistory({ currentVersionId, versions }: VersionHistoryProps) {
+export function VersionHistory({ currentVersionId, versions, onReport }: VersionHistoryProps) {
   const ordered = [...versions].sort((left, right) => right.code - left.code);
   return (
     <View>
@@ -24,6 +26,13 @@ export function VersionHistory({ currentVersionId, versions }: VersionHistoryPro
               Kod {version.code}
             </AppText>
             {version.changelog ? <AppText tone="muted" style={styles.changelog}>{version.changelog}</AppText> : null}
+            {onReport ? (
+              <Button
+                label={`${version.name} sürümünü şikâyet et`}
+                onPress={() => onReport(version)}
+                variant="text"
+              />
+            ) : null}
           </View>
         );
       })}

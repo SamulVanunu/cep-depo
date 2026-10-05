@@ -19,15 +19,16 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 5 profile/avatar management was committed as `3f5ee40 feat: add profile and avatar management`.
 - Task 6 review data behavior was committed as `75f0756 feat: add ratings and reviews data layer`.
 - Review-body validation was aligned with the database’s optional 3–2000 contract in `cdb2ce2 fix: align review body validation with schema`.
+- Task 7 ratings/reviews UI was committed as `4098589 feat: add ratings and reviews interface`.
 
 ## Current uncommitted changes
 
-- Task 7 reviews UI:
-  - accessible five-star control and one-decimal/empty rating summary;
-  - optional validated review form with edit/delete/pending/safe-error states;
-  - public review list with current profile projection;
-  - anonymous, unconfirmed, suspended and active-account behavior;
-  - app-detail integration after version history.
+- Task 8 reporting flow:
+  - exact report reasons and optional 3–1000 description validation;
+  - exact app/version target lookups and immutable safe inserts;
+  - duplicate-open handling and target-scoped query cache;
+  - gated reusable report modal;
+  - loaded app-level and per-version report actions.
 
 ## Verification
 
@@ -59,12 +60,15 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 7 targeted tests: 8 suites, 55 tests passed.
 - Task 7 full Jest suite: 30 suites, 172 tests passed.
 - Task 7 typecheck, lint and diff-check passed.
+- Task 8 domain/UI targeted tests: 4 suites, 22 tests passed.
+- Task 8 full Jest suite: 33 suites, 188 tests passed.
+- Task 8 typecheck, lint and diff-check passed.
 
 ## Pending
 
-- Commit Task 7 under standing authorization and record it complete.
-- Start Task 8 report/complaint flow.
-- Tasks 8–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
+- Commit Task 8 under standing authorization and record it complete.
+- Start Task 9 full regression, accessibility and release hardening.
+- Tasks 9–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
 
 ## Last blocker
 
@@ -72,4 +76,4 @@ OpenAI subagents repeatedly reached usage limits. Work switched from subagent-dr
 
 ## Recommended next action
 
-Commit verified Task 7, then start Task 8 without repeating Tasks 1–7.
+Commit verified Task 8, then start Task 9 without repeating Tasks 1–8.

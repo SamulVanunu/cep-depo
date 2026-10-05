@@ -17,6 +17,8 @@ import {
 } from '../downloads/open-apk-download';
 import { useDownloadedVersion } from '../downloads/useDownloadedVersion';
 import { ReviewsSection } from '../reviews/ReviewsSection';
+import { ReportSheet } from '../reports/ReportSheet';
+import type { ReportTarget } from '../reports/report.types';
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { VersionHistory } from './VersionHistory';
 import { useCatalogApp } from './catalog.queries';
@@ -42,6 +44,7 @@ export function AppDetailScreen({
   const query = useCatalogApp(normalizedSlug);
   const downloadHistory = useDownloadedVersion(query.data?.id ?? null);
   const [openingDownload, setOpeningDownload] = useState(false);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const openingDownloadRef = useRef(false);
 
   if (!normalizedSlug || (!query.isPending && !query.isError && !query.data)) {
@@ -152,6 +155,18 @@ export function AppDetailScreen({
 
         <AppText variant="title" style={styles.sectionTitle}>Hakkında</AppText>
         <AppText tone="muted">{app.description}</AppText>
+        <Button
+          label="Uygulamayı şikâyet et"
+          onPress={() =>
+            setReportTarget({
+              appId: app.id,
+              appTitle: app.title,
+              versionId: null,
+              versionName: null,
+            })
+          }
+          variant="text"
+        />
 
         <AppText variant="title" style={styles.sectionTitle}>Ekran görüntüleri</AppText>
         <ScreenshotGallery resolveAssetUrl={resolveAssetUrl} screenshots={app.screenshots} />
@@ -168,10 +183,29 @@ export function AppDetailScreen({
         </View>
 
         <AppText variant="title" style={styles.sectionTitle}>Sürüm geçmişi</AppText>
-        <VersionHistory currentVersionId={app.currentVersion.id} versions={app.versions} />
+        <VersionHistory
+          currentVersionId={app.currentVersion.id}
+          onReport={version =>
+            setReportTarget({
+              appId: app.id,
+              appTitle: app.title,
+              versionId: version.id,
+              versionName: version.name,
+            })
+          }
+          versions={app.versions}
+        />
 
         <ReviewsSection appId={app.id} appSlug={app.slug} />
       </ScrollView>
+      {reportTarget ? (
+        <ReportSheet
+          key={`${reportTarget.appId}:${reportTarget.versionId ?? 'app'}`}
+          onDismiss={() => setReportTarget(null)}
+          target={reportTarget}
+          visible
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

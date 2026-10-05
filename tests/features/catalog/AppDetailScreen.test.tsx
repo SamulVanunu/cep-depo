@@ -30,6 +30,14 @@ jest.mock('../../../src/features/reviews/ReviewsSection', () => {
   return { ReviewsSection: () => <Text>Değerlendirmeler bölümü</Text> };
 });
 
+jest.mock('../../../src/features/reports/ReportSheet', () => {
+  const { Text } = require('react-native');
+  return {
+    ReportSheet: ({ target, visible }: { target: { appId: string; versionId: string | null }; visible: boolean }) =>
+      visible ? <Text>{`${target.appId}:${target.versionId ?? 'app'}`}</Text> : null,
+  };
+});
+
 const app: CatalogApp = {
   id: 'app-1',
   slug: 'cep-iptv',
@@ -171,5 +179,16 @@ describe('AppDetailScreen', () => {
     const buttons = alert.mock.calls[0]?.[2];
     expect(alert.mock.calls[0]?.[0]).toBe('İndirme başlatılamadı.');
     expect(buttons?.map(button => button.text)).toContain('Tekrar dene');
+  });
+
+  it('opens reports only for the loaded app and its loaded versions', () => {
+    mockUseCatalogApp.mockReturnValue(queryResult({ data: app }));
+    render(<AppDetailScreen resolveAssetUrl={path => path} slug="route-could-be-arbitrary" />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Uygulamayı şikâyet et' }));
+    expect(screen.getByText('app-1:app')).toBeTruthy();
+
+    fireEvent.press(screen.getByRole('button', { name: '1.2 sürümünü şikâyet et' }));
+    expect(screen.getByText('app-1:version-12')).toBeTruthy();
   });
 });
