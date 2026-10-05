@@ -16,15 +16,15 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 3 auth validators/errors/repository was committed as `2802088 feat: add account authentication flows`.
 - Task 4 auth screens/routes were committed as `259b96e feat: build account authentication screens`.
 - The omitted shared Task 4 layout was recovered in `419f4f1 fix: include shared auth screen layout`.
+- Task 5 profile/avatar management was committed as `3f5ee40 feat: add profile and avatar management`.
 
 ## Current uncommitted changes
 
-- Task 5 profile/avatar management:
-  - typed profile and own-review mapping/repository/query hooks;
-  - active and suspended Account states with username editing and review links;
-  - validated 5 MB PNG/JPEG/WebP avatar upload, deterministic own paths, cleanup and removal;
-  - scoped private-cache cleanup on signout;
-  - Expo image-picker dependency and permission configuration.
+- Task 6 review data layer:
+  - typed summary/review/draft contracts and strict mappers;
+  - visible list, own review, safe save/update/delete repository operations;
+  - app/user-scoped query keys and targeted review/account-history invalidation;
+  - mapper, repository and query-hook tests.
 
 ## Verification
 
@@ -48,12 +48,17 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 5 pre-review full Jest suite: 24 suites, 132 tests passed.
 - Task 5 typecheck, lint, diff-check and Expo Doctor (21/21) passed before final review fixes.
 - `npm audit --omit=dev --audit-level=high` reports 57 existing Expo/toolchain transitive advisories; suggested automatic remediation is breaking and was not applied.
+- Task 5 final full Jest suite: 24 suites, 134 tests passed; completion package 36/36 passed.
+- Task 6 targeted tests: 3 suites, 21 tests passed.
+- Task 6 full Jest suite: 27 suites, 155 tests passed.
+- Task 6 typecheck, lint and diff-check passed.
+- The plan’s directory-form `jest --runTestsByPath tests/features/reviews` command is invalid for this Jest version; explicit test-file paths passed.
 
 ## Pending
 
-- Run fresh full verification after Task 5 review fixes, then commit under standing authorization.
-- Record Task 5 complete and start Task 6 review/rating UI.
-- Tasks 6–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
+- Commit Task 6 under standing authorization and record it complete.
+- Start Task 7 ratings/reviews UI.
+- Tasks 7–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
 
 ## Last blocker
 
@@ -61,4 +66,4 @@ OpenAI subagents repeatedly reached usage limits. Work switched from subagent-dr
 
 ## Recommended next action
 
-Commit verified Task 5, then start Task 6 without repeating Tasks 1–5.
+Commit verified Task 6, then start Task 7 without repeating Tasks 1–6.
