@@ -16,6 +16,7 @@ import {
   openApkDownload,
 } from '../downloads/open-apk-download';
 import { useDownloadedVersion } from '../downloads/useDownloadedVersion';
+import { ReviewsSection } from '../reviews/ReviewsSection';
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { VersionHistory } from './VersionHistory';
 import { useCatalogApp } from './catalog.queries';
@@ -168,6 +169,8 @@ export function AppDetailScreen({
 
         <AppText variant="title" style={styles.sectionTitle}>Sürüm geçmişi</AppText>
         <VersionHistory currentVersionId={app.currentVersion.id} versions={app.versions} />
+
+        <ReviewsSection appId={app.id} appSlug={app.slug} />
       </ScrollView>
     </SafeAreaView>
   );

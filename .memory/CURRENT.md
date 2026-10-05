@@ -17,14 +17,17 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 4 auth screens/routes were committed as `259b96e feat: build account authentication screens`.
 - The omitted shared Task 4 layout was recovered in `419f4f1 fix: include shared auth screen layout`.
 - Task 5 profile/avatar management was committed as `3f5ee40 feat: add profile and avatar management`.
+- Task 6 review data behavior was committed as `75f0756 feat: add ratings and reviews data layer`.
+- Review-body validation was aligned with the database’s optional 3–2000 contract in `cdb2ce2 fix: align review body validation with schema`.
 
 ## Current uncommitted changes
 
-- Task 6 review data layer:
-  - typed summary/review/draft contracts and strict mappers;
-  - visible list, own review, safe save/update/delete repository operations;
-  - app/user-scoped query keys and targeted review/account-history invalidation;
-  - mapper, repository and query-hook tests.
+- Task 7 reviews UI:
+  - accessible five-star control and one-decimal/empty rating summary;
+  - optional validated review form with edit/delete/pending/safe-error states;
+  - public review list with current profile projection;
+  - anonymous, unconfirmed, suspended and active-account behavior;
+  - app-detail integration after version history.
 
 ## Verification
 
@@ -53,12 +56,15 @@ Implement `docs/superpowers/plans/2026-10-01-accounts-community.md` on branch `f
 - Task 6 full Jest suite: 27 suites, 155 tests passed.
 - Task 6 typecheck, lint and diff-check passed.
 - The plan’s directory-form `jest --runTestsByPath tests/features/reviews` command is invalid for this Jest version; explicit test-file paths passed.
+- Task 7 targeted tests: 8 suites, 55 tests passed.
+- Task 7 full Jest suite: 30 suites, 172 tests passed.
+- Task 7 typecheck, lint and diff-check passed.
 
 ## Pending
 
-- Commit Task 6 under standing authorization and record it complete.
-- Start Task 7 ratings/reviews UI.
-- Tasks 7–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
+- Commit Task 7 under standing authorization and record it complete.
+- Start Task 8 report/complaint flow.
+- Tasks 8–10 remain; Task 10 hosted migration/EAS build requires explicit external-action approval and credentials.
 
 ## Last blocker
 
@@ -66,4 +72,4 @@ OpenAI subagents repeatedly reached usage limits. Work switched from subagent-dr
 
 ## Recommended next action
 
-Commit verified Task 6, then start Task 7 without repeating Tasks 1–6.
+Commit verified Task 7, then start Task 8 without repeating Tasks 1–7.

@@ -25,6 +25,11 @@ jest.mock('../../../src/features/downloads/useDownloadedVersion', () => ({
   useDownloadedVersion: jest.fn(),
 }));
 
+jest.mock('../../../src/features/reviews/ReviewsSection', () => {
+  const { Text } = require('react-native');
+  return { ReviewsSection: () => <Text>Değerlendirmeler bölümü</Text> };
+});
+
 const app: CatalogApp = {
   id: 'app-1',
   slug: 'cep-iptv',
@@ -98,7 +103,7 @@ describe('AppDetailScreen', () => {
 
   it('renders icon, description, ordered screenshots and descending published versions', () => {
     mockUseCatalogApp.mockReturnValue(queryResult({ data: app }));
-    render(
+    const view = render(
       <AppDetailScreen
         resolveAssetUrl={path => `https://assets.example/${path}`}
         slug="cep-iptv"
@@ -112,6 +117,9 @@ describe('AppDetailScreen', () => {
     expect(screen.getByText('1.2 · Güncel sürüm')).toBeTruthy();
     expect(screen.getByText('1.0')).toBeTruthy();
     expect(screen.queryByText('1.3-beta')).toBeNull();
+    expect(screen.getByText('Değerlendirmeler bölümü')).toBeTruthy();
+    const tree = JSON.stringify(view.toJSON());
+    expect(tree.indexOf('Değerlendirmeler bölümü')).toBeGreaterThan(tree.indexOf('Sürüm geçmişi'));
   });
 
   it('uses deterministic fallbacks when icon and screenshots are absent', () => {
