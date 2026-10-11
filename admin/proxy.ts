@@ -2,24 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { getPublicEnv } from './src/lib/env';
+import { contentSecurityPolicy } from './src/server/http/content-security-policy';
 import type { Database } from './src/types/database.types';
-
-function contentSecurityPolicy(nonce: string, supabaseOrigin: string): string {
-  const developmentScript = process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '';
-  return [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${developmentScript}`,
-    "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob: ${supabaseOrigin}`,
-    `connect-src 'self' ${supabaseOrigin}`,
-    "font-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    'upgrade-insecure-requests',
-  ].join('; ');
-}
 
 function applySecurityHeaders(response: NextResponse, nonce: string, policy: string): NextResponse {
   response.headers.set('Content-Security-Policy', policy);
@@ -30,7 +14,7 @@ function applySecurityHeaders(response: NextResponse, nonce: string, policy: str
 export async function proxy(request: NextRequest) {
   const env = getPublicEnv();
   const nonce = crypto.randomUUID().replaceAll('-', '');
-  const policy = contentSecurityPolicy(nonce, new URL(env.supabaseUrl).origin);
+  const policy = contentSecurityPolicy(nonce, env.supabaseUrl, process.env.NODE_ENV === 'development');
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('Content-Security-Policy', policy);
   requestHeaders.set('x-nonce', nonce);

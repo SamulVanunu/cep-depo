@@ -8,6 +8,7 @@ import { APK_MIME_TYPES, finalizeUploadSchema, uploadIntentSchema } from './uplo
 import { requireAdmin } from '../../server/auth/require-admin';
 import { getServerEnv } from '../../lib/env';
 import type { Json } from '../../types/database.types';
+import { storageAuthHeaders } from './storage-auth-headers';
 
 type Actor = Readonly<{ userId: string }>;
 type StorageInspection = Readonly<{ size: number; mimeType: string }>;
@@ -168,7 +169,7 @@ function defaultDependencies(): UploadActionDependencies {
       const response = await fetch(
         `${env.supabaseUrl}/storage/v1/object/authenticated/apk-drafts/${path.split('/').map(encodeURIComponent).join('/')}`,
         {
-          headers: { Authorization: `Bearer ${env.supabaseSecretKey}`, Range: 'bytes=0-1' },
+          headers: { ...storageAuthHeaders(env.supabaseSecretKey), Range: 'bytes=0-1' },
           cache: 'no-store',
         },
       );
