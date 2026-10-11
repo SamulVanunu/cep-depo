@@ -68,6 +68,16 @@ describe('destructive user boundaries', () => {
     expect(updateAuthBan).not.toHaveBeenCalled();
   });
 
+  it('rejects direct self-deletion before Auth admin mutation', async () => {
+    const deleteAuthUser = vi.fn();
+    const result = await deleteUser(
+      { userId: actorId, confirmation: 'admin_e2e' },
+      dependencies({ deleteAuthUser }),
+    );
+    expect(result).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } });
+    expect(deleteAuthUser).not.toHaveBeenCalled();
+  });
+
   it('rejects suspension or deletion of the sole admin', async () => {
     const target = { userId, username: 'sole_admin', status: 'suspended' as const, isAdmin: true, avatarPath: null, email: 'admin@example.test' };
     const deps = dependencies({ getTarget: vi.fn(async () => target), countAdmins: vi.fn(async () => 1) });

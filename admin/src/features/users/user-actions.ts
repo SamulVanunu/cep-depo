@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { getServerEnv } from '../../lib/env';
@@ -201,4 +202,8 @@ export async function deleteUser(
 export async function suspendUserAction(userId: string) { return suspendUser(userId); }
 export async function activateUserAction(userId: string) { return activateUser(userId); }
 export async function requestRecoveryAction(userId: string) { return requestRecovery(userId); }
-export async function deleteUserAction(raw: z.input<typeof deleteUserSchema>) { return deleteUser(raw); }
+export async function deleteUserAction(raw: z.input<typeof deleteUserSchema>) {
+  const result = await deleteUser(raw);
+  if (result.ok) redirect('/users');
+  return result;
+}

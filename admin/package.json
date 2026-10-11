@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "bash e2e/run-local.sh"
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",

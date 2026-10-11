@@ -4,6 +4,7 @@ import { getServerEnv } from '../../../../src/lib/env';
 import { toActionError } from '../../../../src/server/errors/action-error';
 import { assertSameOrigin } from '../../../../src/server/http/assert-same-origin';
 import { createUploadIntentAction } from '../../../../src/features/uploads/upload-actions';
+import { resumableUploadEndpoint } from '../../../../src/features/uploads/upload-endpoint';
 
 export async function POST(request: Request) {
   try {
@@ -11,12 +12,11 @@ export async function POST(request: Request) {
     assertSameOrigin(request, env.siteUrl);
     const result = await createUploadIntentAction(await request.json());
     if (!result.ok) return NextResponse.json(result, { status: result.error.code === 'VALIDATION' ? 400 : 403 });
-    const project = new URL(env.supabaseUrl).hostname.split('.')[0];
     return NextResponse.json({
       ...result,
       data: {
         ...result.data,
-        endpoint: `https://${project}.storage.supabase.co/storage/v1/upload/resumable/sign`,
+        endpoint: resumableUploadEndpoint(env.supabaseUrl),
       },
     });
   } catch (error) {

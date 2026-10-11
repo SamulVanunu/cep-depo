@@ -86,6 +86,41 @@ npm run db:test
 npx expo-doctor
 ```
 
+## Yönetim paneli
+
+Bağımsız Next.js yönetim uygulaması `admin/` dizinindedir. Mobil uygulamanın public anahtarlarıyla secret anahtarları karıştırmayın.
+
+```bash
+cd admin
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Yerel `.env.local` değerleri:
+
+- `NEXT_PUBLIC_SUPABASE_URL` ve `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: browser/SSR public istemcisi;
+- `NEXT_PUBLIC_SITE_URL`: exact-origin kontrolü için panel adresi;
+- `SUPABASE_SECRET_KEY`: yalnız server modüllerinde kullanılan ayrıcalıklı anahtar;
+- `ADMIN_READ_ONLY=true`: preview ortamlarında tüm mutation'ları kapatır;
+- `AUTH_EMAIL_ENABLED=false`: SMTP doğrulanana kadar recovery isteğini kapatır.
+
+`SUPABASE_SECRET_KEY` hiçbir zaman `NEXT_PUBLIC_*`, HTML, log, audit metadata veya istemci bundle'ına yazılmaz. Vercel projesinin **Root Directory** değeri `admin` olmalıdır.
+
+Panel kalite kontrolleri:
+
+```bash
+npm --prefix admin test
+npm --prefix admin run typecheck
+npm --prefix admin run lint
+npm --prefix admin run build
+npm --prefix admin run test:e2e
+```
+
+E2E komutu yalnız yerel Supabase'e bağlanır, kendi `*-e2e@example.test` kullanıcılarını oluşturup temizler ve veritabanını resetlemez. Tamamlanmamış APK upload'ları uygulama detayındaki yayın ekranından, yalnız tanınan `operations/<uuid>/source.apk` yolları için audit kaydıyla temizlenir. Auth ban ile profil durumu ayrışırsa kullanıcı ekranı `Kısmi` durum gösterir; aynı etkinleştirme/askıya alma işlemi tekrar çalıştırılarak iki taraf uzlaştırılır.
+
+Hosted SMTP şu anda beta kısıtıdır. `AUTH_EMAIL_ENABLED` yalnız kayıt, doğrulama ve recovery teslimatı gerçek alıcıyla doğrulandıktan sonra açılmalıdır.
+
 ## APK indirme davranışı
 
 - APK URL'si yalnız Supabase'in public `apks` bucket'ından oluşturulur ve HTTPS değilse açılmaz.
@@ -139,6 +174,7 @@ Mevcut teslimat şunları içerir:
 - profil, kullanıcı adı ve avatar yönetimi;
 - puan özeti, herkese açık yorumlar ve kullanıcının kendi değerlendirmesini yönetmesi;
 - uygulama ve sürüm şikâyetleri;
-- Supabase migration, seed, RLS, Storage policy'leri ve pgTAP testleri.
+- Supabase migration, seed, RLS, Storage policy'leri ve pgTAP testleri;
+- `admin/` altında katalog, APK yayınlama, moderasyon ve Auth kullanıcı yönetim paneli.
 
-Takip, gerçek push bildirimleri, Next.js yönetim paneli, kullanıcıya açık uygulama yayınlama iş akışı ve mağaza dağıtımı sonraki teslimatlardadır. Bildirim sekmesi bu nedenle işlev varmış gibi davranmaz.
+Takip, gerçek push bildirimleri, kullanıcıya açık uygulama yayınlama iş akışı ve mağaza dağıtımı sonraki teslimatlardadır. Bildirim sekmesi bu nedenle işlev varmış gibi davranmaz.
