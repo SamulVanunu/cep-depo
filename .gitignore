@@ -18,3 +18,4 @@ admin/next-env.d.ts
 credentials.json
 .superpowers/
 .worktrees/
+.vercel/
