@@ -7,6 +7,7 @@ import { AssetManager } from '../../../../src/features/apps/asset-manager';
 import { getApp, listCategories } from '../../../../src/features/apps/app-dal';
 import { StatusBadge } from '../../../../src/components/status/status-badge';
 import { ScreenshotList } from '../../../../src/features/apps/screenshot-list';
+import { VersionManager } from '../../../../src/features/versions/version-manager';
 
 export const metadata: Metadata = { title: 'Uygulama detayı' };
 
@@ -29,11 +30,13 @@ export default async function AppDetailPage({
             {app.status === 'active' ? 'Aktif' : 'Arşiv'}
           </StatusBadge>
           <Link href="/apps">Listeye dön</Link>
+          <Link className="primary-button" href={`/apps/${app.id}/versions/new`}>Yeni APK sürümü</Link>
         </div>
       </header>
 
       <AppForm app={app} categories={categories} />
       <AssetManager appId={app.id} screenshotCount={app.app_screenshots.length} />
+      <VersionManager versions={app.app_versions} />
 
       <section aria-labelledby="screenshots-heading" className="panel-section">
         <h2 id="screenshots-heading">Ekran görüntüleri</h2>
