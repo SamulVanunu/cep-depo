@@ -121,6 +121,25 @@ E2E komutu yalnız yerel Supabase'e bağlanır, kendi `*-e2e@example.test` kulla
 
 Hosted SMTP şu anda beta kısıtıdır. `AUTH_EMAIL_ENABLED` yalnız kayıt, doğrulama ve recovery teslimatı gerçek alıcıyla doğrulandıktan sonra açılmalıdır.
 
+### Admin production runbook
+
+- Production: <https://cep-depo-admin.vercel.app>
+- Vercel proje kimliği: `cep-depo-admin` / `prj_w5zuIaoIxfKOvXDb2J9uRrvA40Af`
+- Supabase proje ref'i: `otksmbcuopinlecrfobe`
+- Production deployment: `dpl_4uM5eoxijpU6A92EBkXXQ5fKyCZ8`
+- Önceki rollback deployment'ı: `dpl_7P8EDpnSmvWuGm3xVG72NMqAoFGb`
+
+Supabase `ap-southeast-1` bölgesindedir; `admin/vercel.json` Vercel Functions'ı en yakın `sin1` bölgesine yerleştirir. Repository kökünden manuel CLI deploy yapılırken bölgeyi açıkça koruyun:
+
+```bash
+vercel deploy --prod --regions sin1 --scope samulvanunus-projects
+vercel inspect <deployment-id> --scope samulvanunus-projects
+```
+
+Release doğrulamasında hosted migration geçmişi `20261005194648_admin_panel_foundation.sql` dahil yerelle eşleşti. Login, dashboard/listeler, review hide/show, report resolve, APK upload/publish/withdraw, admin self-protection ve ilgili audit satırları production'da fiziksel olarak doğrulandı; test fixture'ları ve storage nesneleri temizlendi. Veritabanı migration'ları geri alınmaz, yeni bir forward-fix migration ile düzeltilir. Uygulama rollback'i gerekiyorsa önceki deployment doğrulanıp `vercel rollback dpl_7P8EDpnSmvWuGm3xVG72NMqAoFGb --scope samulvanunus-projects` çalıştırılır.
+
+Supabase Dashboard'dan ilk kullanıcı oluşturulurken `user_metadata.username` sağlanmıyorsa profil trigger'ı kaydı reddeder. Bootstrap hesabı admin API üzerinden geçerli kullanıcı adı metadata'sı ile oluşturulmalı, ardından `public.user_roles` tablosuna `admin` rolü atanmalıdır. Secret veya kullanıcı parolası runbook'a yazılmaz.
+
 ## APK indirme davranışı
 
 - APK URL'si yalnız Supabase'in public `apks` bucket'ından oluşturulur ve HTTPS değilse açılmaz.
