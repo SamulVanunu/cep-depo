@@ -141,8 +141,11 @@ export function AppStep({ apps, selectedApp, createQuickApp, uploadIcon, onConti
             <span>Uygulama ara</span>
             <input
               aria-label="Uygulama ara"
+              autoComplete="off"
+              name="appQuery"
               onChange={event => setQuery(event.currentTarget.value)}
-              placeholder="Ad veya slug"
+              placeholder="Ad veya slug…"
+              spellCheck={false}
               type="search"
               value={query}
             />
@@ -184,12 +187,13 @@ export function AppStep({ apps, selectedApp, createQuickApp, uploadIcon, onConti
         >
           <label className="field">
             <span>Uygulama adı</span>
-            <input aria-describedby={error ? 'app-step-error' : undefined} maxLength={90} name="title" ref={titleRef} />
+            <input aria-describedby={error ? 'app-step-error' : undefined} autoComplete="off" maxLength={90} name="title" ref={titleRef} />
           </label>
           <label className="field">
             <span>Kısa açıklama</span>
             <textarea
               aria-describedby={error ? 'app-step-error' : undefined}
+              autoComplete="off"
               maxLength={180}
               name="shortDescription"
               ref={descriptionRef}

@@ -47,8 +47,8 @@ export function AppForm({
       <div className="form-grid">
         <label className="field">
           <span>Kategori</span>
-          <select defaultValue={app?.category_id} name="categoryId" required>
-            <option value="">Kategori seç</option>
+          <select autoComplete="off" defaultValue={app?.category_id ?? ''} name="categoryId">
+            <option value="">Genel (varsayılan)</option>
             {categories.map(category => (
               <option key={category.id} value={category.id}>{category.name}</option>
             ))}
@@ -56,19 +56,19 @@ export function AppForm({
         </label>
         <label className="field">
           <span>Slug</span>
-          <input defaultValue={app?.slug} maxLength={120} name="slug" required />
+          <input autoComplete="off" defaultValue={app?.slug} maxLength={120} name="slug" required spellCheck={false} />
         </label>
         <label className="field form-grid-span">
           <span>Başlık</span>
-          <input defaultValue={app?.title} maxLength={90} minLength={2} name="title" required />
+          <input autoComplete="off" defaultValue={app?.title} maxLength={90} minLength={2} name="title" required />
         </label>
         <label className="field form-grid-span">
           <span>Kısa açıklama</span>
-          <textarea defaultValue={app?.short_description} maxLength={180} minLength={10} name="shortDescription" required rows={3} />
+          <textarea autoComplete="off" defaultValue={app?.short_description} maxLength={180} minLength={10} name="shortDescription" required rows={3} />
         </label>
         <label className="field form-grid-span">
           <span>Açıklama</span>
-          <textarea defaultValue={app?.description} maxLength={5000} minLength={10} name="description" required rows={10} />
+          <textarea autoComplete="off" defaultValue={app?.description} maxLength={5000} minLength={10} name="description" required rows={10} />
         </label>
         <label className="field">
           <span>Durum</span>

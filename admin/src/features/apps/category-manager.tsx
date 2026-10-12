@@ -20,15 +20,17 @@ function CategoryForm({ category }: Readonly<{ category?: CategoryOption }>) {
   return (
     <form action={formAction} className="category-row">
       <label className="visually-hidden" htmlFor={`category-name-${category?.id ?? 'new'}`}>Kategori adı</label>
-      <input defaultValue={category?.name} id={`category-name-${category?.id ?? 'new'}`} name="name" placeholder="Kategori adı" required />
+      <input autoComplete="off" defaultValue={category?.name} id={`category-name-${category?.id ?? 'new'}`} name="name" placeholder="Kategori adı…" required />
       <label className="visually-hidden" htmlFor={`category-slug-${category?.id ?? 'new'}`}>Kategori slug</label>
-      <input defaultValue={category?.slug} id={`category-slug-${category?.id ?? 'new'}`} name="slug" placeholder="kategori-slug" required />
+      <input autoComplete="off" defaultValue={category?.slug} id={`category-slug-${category?.id ?? 'new'}`} name="slug" placeholder="kategori-slug…" required spellCheck={false} />
       <label className="visually-hidden" htmlFor={`category-position-${category?.id ?? 'new'}`}>Sıra</label>
       <input defaultValue={category?.position ?? 0} id={`category-position-${category?.id ?? 'new'}`} min={0} name="position" type="number" />
       <label className="check-field compact-check">
-        <input defaultChecked={category?.isActive ?? true} name="isActive" type="checkbox" />
+        {category?.isDefault ? <input name="isActive" type="hidden" value="on" /> : null}
+        <input defaultChecked={category?.isActive ?? true} disabled={category?.isDefault} name="isActive" type="checkbox" />
         <span>Aktif</span>
       </label>
+      {category?.isDefault ? <span className="status-badge status-badge--success">Varsayılan</span> : null}
       <button className="secondary-button" disabled={pending} type="submit">
         {category ? 'Güncelle' : 'Ekle'}
       </button>

@@ -3,7 +3,6 @@ import Link from 'next/link';
 
 import { Pagination } from '../../../src/components/tables/pagination';
 import { AppList } from '../../../src/features/apps/app-list';
-import { CategoryManager } from '../../../src/features/apps/category-manager';
 import { listApps, listCategories } from '../../../src/features/apps/app-dal';
 import { parseListParams, type RawSearchParams } from '../../../src/lib/search-params';
 
@@ -22,15 +21,15 @@ export default async function AppsPage({
         <div>
           <p className="eyebrow">Katalog</p>
           <h1>Uygulamalar</h1>
-          <p className="muted">Katalog kayıtlarını, kategorileri ve yayın varlıklarını yönet.</p>
+          <p className="muted">Katalog kayıtlarını ve yayın durumlarını yönet.</p>
         </div>
-        <Link className="primary-button" href="/apps/new">Yeni uygulama</Link>
+        <Link className="primary-button" href="/publish">APK Yükle</Link>
       </header>
 
       <form className="filter-bar" method="get">
         <label className="field">
           <span>Ara</span>
-          <input defaultValue={params.query} maxLength={200} name="query" placeholder="Başlık veya slug" />
+          <input autoComplete="off" defaultValue={params.query} maxLength={200} name="query" placeholder="Başlık veya slug…" />
         </label>
         <label className="field">
           <span>Durum</span>
@@ -52,7 +51,6 @@ export default async function AppsPage({
 
       <AppList result={result} />
       <Pagination page={result.page} pageSize={result.pageSize} searchParams={rawParams} total={result.count} />
-      <CategoryManager categories={categories} />
     </>
   );
 }

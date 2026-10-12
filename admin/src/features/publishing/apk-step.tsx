@@ -265,13 +265,14 @@ export function ApkStep({
             accept=".apk,application/vnd.android.package-archive,application/octet-stream"
             aria-describedby={phase === 'error' ? 'apk-step-error' : undefined}
             disabled={active}
+            name="apk"
             onChange={event => setFile(event.currentTarget.files?.[0] ?? null)}
             type="file"
           />
         </label>
-        <label className="field"><span>Sürüm adı</span><input disabled={active} maxLength={40} name="versionName" /></label>
-        <label className="field"><span>Sürüm kodu</span><input disabled={active} min={1} name="versionCode" type="number" /></label>
-        <label className="field"><span>Değişiklik notları</span><textarea disabled={active} maxLength={5000} name="changelog" rows={5} /></label>
+        <label className="field"><span>Sürüm adı</span><input autoComplete="off" disabled={active} maxLength={40} name="versionName" /></label>
+        <label className="field"><span>Sürüm kodu</span><input autoComplete="off" disabled={active} inputMode="numeric" min={1} name="versionCode" type="number" /></label>
+        <label className="field"><span>Değişiklik notları</span><textarea autoComplete="off" disabled={active} maxLength={5000} name="changelog" rows={5} /></label>
 
         {active ? (
           <div className="upload-progress">

@@ -19,6 +19,7 @@ export type CategoryOption = Readonly<{
   slug: string;
   position: number;
   isActive: boolean;
+  isDefault: boolean;
 }>;
 
 export async function listCategories(): Promise<readonly CategoryOption[]> {
@@ -26,7 +27,7 @@ export async function listCategories(): Promise<readonly CategoryOption[]> {
   const client = getAdminClient(identity);
   const { data, error } = await client
     .from('categories')
-    .select('id, name, slug, position, is_active')
+    .select('id, name, slug, position, is_active, is_default')
     .order('position')
     .order('name');
   if (error) throw new ActionException('TEMPORARY');
@@ -36,6 +37,7 @@ export async function listCategories(): Promise<readonly CategoryOption[]> {
     slug: category.slug,
     position: category.position,
     isActive: category.is_active,
+    isDefault: category.is_default,
   }));
 }
 
@@ -46,7 +48,7 @@ export async function listApps(params: ListParams) {
   const to = from + params.pageSize - 1;
   let query = client
     .from('apps')
-    .select('id, title, slug, status, featured, download_count, updated_at, categories(id, name)', {
+    .select('id, title, slug, status, app_versions(version_name, version_code, status)', {
       count: 'exact',
     });
 
@@ -55,6 +57,7 @@ export async function listApps(params: ListParams) {
   }
   if (params.status) query = query.eq('status', params.status);
   if (params.categoryId) query = query.eq('category_id', params.categoryId);
+  query = query.eq('app_versions.status', 'published');
 
   const { data, error, count } = await query
     .order(params.sort, { ascending: params.direction === 'asc' })
@@ -62,7 +65,21 @@ export async function listApps(params: ListParams) {
   if (error) throw new ActionException('TEMPORARY');
 
   return {
-    items: data ?? [],
+    items: (data ?? []).map(app => {
+      const latest = app.app_versions.reduce<null | { versionName: string; versionCode: number }>(
+        (current, version) => !current || version.version_code > current.versionCode
+          ? { versionName: version.version_name, versionCode: version.version_code }
+          : current,
+        null,
+      );
+      return {
+        id: app.id,
+        title: app.title,
+        slug: app.slug,
+        status: app.status,
+        latestVersion: latest,
+      };
+    }),
     count: count ?? 0,
     page: params.page,
     pageSize: params.pageSize,

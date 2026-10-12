@@ -6,14 +6,16 @@ import { usePathname } from 'next/navigation';
 import { logoutAction } from '../../../app/(auth)/login/actions';
 
 const destinations = [
-  { href: '/', label: 'Özet' },
+  { href: '/publish', label: 'APK Yükle' },
   { href: '/apps', label: 'Uygulamalar' },
   { href: '/reviews', label: 'Yorumlar' },
   { href: '/reports', label: 'Şikâyetler' },
   { href: '/users', label: 'Kullanıcılar' },
+  { href: '/settings', label: 'Ayarlar' },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {
+  if (href === '/publish') return pathname === href;
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
 }
 

@@ -12,19 +12,17 @@ export function AppList({ result }: Readonly<{ result: AppListResult }>) {
         <thead>
           <tr>
             <th scope="col">Uygulama</th>
-            <th scope="col">Kategori</th>
+            <th scope="col">Son sürüm</th>
             <th scope="col">Durum</th>
-            <th scope="col">İndirme</th>
-            <th scope="col"><span className="visually-hidden">İşlem</span></th>
+            <th scope="col">İşlem</th>
           </tr>
         </thead>
         <tbody>
           {result.items.map(app => (
             <tr key={app.id}>
               <td><strong>{app.title}</strong><small>{app.slug}</small></td>
-              <td>{app.categories?.name ?? '—'}</td>
+              <td>{app.latestVersion ? <><strong>{app.latestVersion.versionName}</strong><small>Kod {app.latestVersion.versionCode}</small></> : 'Henüz sürüm yok'}</td>
               <td><StatusBadge tone={app.status === 'active' ? 'success' : 'neutral'}>{app.status === 'active' ? 'Aktif' : 'Arşiv'}</StatusBadge></td>
-              <td>{new Intl.NumberFormat('tr-TR').format(app.download_count)}</td>
               <td><Link href={`/apps/${app.id}`}>Yönet</Link></td>
             </tr>
           ))}

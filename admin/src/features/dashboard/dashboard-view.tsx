@@ -24,8 +24,30 @@ export function DashboardView({ summary }: Readonly<{ summary: DashboardSummary 
           <h1>Özet</h1>
           <p className="muted">Yayın, moderasyon ve kullanıcı kuyruklarının güncel durumu.</p>
         </div>
-        <StatusBadge tone="success">Sistem çevrimiçi</StatusBadge>
+        <Link className="primary-button" href="/publish">APK Yükle</Link>
       </header>
+
+      <section aria-labelledby="latest-published-heading" className="latest-published-section">
+        <div className="section-heading">
+          <div>
+            <h2 id="latest-published-heading">Son yayınlananlar</h2>
+            <p className="muted">En son kataloğa çıkan 5 uygulama sürümü.</p>
+          </div>
+          <StatusBadge tone="success">Sistem çevrimiçi</StatusBadge>
+        </div>
+        {summary.latestPublishedApps.length ? (
+          <ul className="latest-published-list">
+            {summary.latestPublishedApps.map(release => (
+              <li key={`${release.appId}-${release.versionCode}`}>
+                <Link aria-label={release.title} href={`/apps/${release.appId}`}>
+                  <span><strong>{release.title}</strong><small>{release.versionName} · Kod {release.versionCode}</small></span>
+                  <time dateTime={release.publishedAt}>{dateFormatter.format(new Date(release.publishedAt))}</time>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="empty-table">Henüz yayımlanmış uygulama yok.</p>}
+      </section>
 
       <section aria-labelledby="queues-heading">
         <div className="section-heading">

@@ -30,7 +30,7 @@ export default async function AppDetailPage({
             {app.status === 'active' ? 'Aktif' : 'Arşiv'}
           </StatusBadge>
           <Link href="/apps">Listeye dön</Link>
-          <Link className="primary-button" href={`/apps/${app.id}/versions/new`}>Yeni APK sürümü</Link>
+          <Link className="primary-button" href={`/publish?appId=${encodeURIComponent(app.id)}`}>Yeni APK yükle</Link>
         </div>
       </header>
 

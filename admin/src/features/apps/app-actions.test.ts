@@ -5,6 +5,7 @@ import {
   createApp,
   createCategory,
   createQuickApp,
+  updateCategory,
   type CatalogActionDependencies,
 } from './app-actions';
 import {
@@ -34,6 +35,7 @@ function catalogDependencies(
   return {
     authorize: vi.fn(async () => ({ userId: actorId })),
     categoryExists: vi.fn(async () => true),
+    categoryIsDefault: vi.fn(async () => false),
     getDefaultCategoryId: vi.fn(async () => categoryId),
     insertApp: vi.fn(async () => ({ data: { id: appId }, error: null })),
     updateApp: vi.fn(async () => ({ error: null })),
@@ -193,6 +195,22 @@ describe('catalog actions', () => {
       }),
     );
     expect(result).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+  });
+
+  it('rejects deactivating the default category before mutation', async () => {
+    const data = new FormData();
+    data.set('name', 'Genel');
+    data.set('slug', 'genel');
+    data.set('position', '0');
+    const update = vi.fn();
+
+    const result = await updateCategory(categoryId, data, catalogDependencies({
+      categoryIsDefault: vi.fn(async () => true),
+      updateCategory: update,
+    }));
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('archives through an explicit status-only mutation', async () => {

@@ -38,8 +38,9 @@ export default async function DashboardLayout(
 
   return (
     <div className="dashboard-shell">
+      <a className="skip-link" href="#main-content">Ana içeriğe geç</a>
       <Sidebar />
-      <main className="dashboard-content">{children}</main>
+      <main className="dashboard-content" id="main-content">{children}</main>
     </div>
   );
 }

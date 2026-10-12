@@ -22,6 +22,7 @@ type AuditInput = Readonly<{
 export type CatalogActionDependencies = Readonly<{
   authorize(): Promise<Actor>;
   categoryExists(categoryId: string): Promise<boolean>;
+  categoryIsDefault(categoryId: string): Promise<boolean>;
   getDefaultCategoryId(): Promise<string | null>;
   insertApp(input: Readonly<Record<string, unknown>>): Promise<{
     data: Readonly<{ id: string }> | null;
@@ -65,6 +66,16 @@ function defaultDependencies(): CatalogActionDependencies {
       const { data, error } = await db.from('categories').select('id').eq('id', categoryId).maybeSingle();
       if (error) throw error;
       return Boolean(data);
+    },
+    async categoryIsDefault(categoryId) {
+      const db = await database();
+      const { data, error } = await db
+        .from('categories')
+        .select('is_default')
+        .eq('id', categoryId)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.is_default ?? false;
     },
     async getDefaultCategoryId() {
       const db = await database();
@@ -307,6 +318,7 @@ export async function createCategory(
       metadata: {},
     });
     dependencies.revalidate?.('/apps');
+    dependencies.revalidate?.('/settings');
     return { ok: true, data: { id: insert.data.id, ...(auditWarning ? { auditWarning } : {}) } };
   } catch (error) {
     return {
@@ -325,6 +337,9 @@ export async function updateCategory(
     const id = z.string().uuid().parse(categoryId);
     const actor = await dependencies.authorize();
     const input = parseCategoryFormData(formData);
+    if (!input.isActive && await dependencies.categoryIsDefault(id)) {
+      throw new ActionException('VALIDATION');
+    }
     const update = await dependencies.updateCategory(id, {
       name: input.name,
       slug: input.slug,
@@ -340,6 +355,7 @@ export async function updateCategory(
       metadata: {},
     });
     dependencies.revalidate?.('/apps');
+    dependencies.revalidate?.('/settings');
     return { ok: true, data: { id, ...(auditWarning ? { auditWarning } : {}) } };
   } catch (error) {
     return {
