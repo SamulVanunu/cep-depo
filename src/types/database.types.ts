@@ -1,4 +1,3 @@
-
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
@@ -113,13 +112,13 @@ isOneToOne: false
                   ]
                 },"categories": {
                   Row: {
-                    "created_at": string,"id": string,"is_active": boolean,"name": string,"position": number,"slug": string,"updated_at": string
+                    "created_at": string,"id": string,"is_active": boolean,"is_default": boolean,"name": string,"position": number,"slug": string,"updated_at": string
                   }
                   Insert: {
-                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name": string,"position"?: number,"slug": string,"updated_at"?: string
+                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"is_default"?: boolean,"name": string,"position"?: number,"slug": string,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"position"?: number,"slug"?: string,"updated_at"?: string
+                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"is_default"?: boolean,"name"?: string,"position"?: number,"slug"?: string,"updated_at"?: string
                   }
                   Relationships: [
 
@@ -288,6 +287,9 @@ isOneToOne: false
 { Args: { "p_actor_id": string,"p_review_id": string }; Returns: undefined
                            },
 "admin_publish_version":
+{ Args: { "p_actor_id": string,"p_version_id": string }; Returns: undefined
+                           },
+"admin_publish_version_and_activate_app":
 { Args: { "p_actor_id": string,"p_version_id": string }; Returns: undefined
                            },
 "admin_record_external_action":
