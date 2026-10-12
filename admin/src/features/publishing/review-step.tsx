@@ -13,11 +13,13 @@ export function ReviewStep({
   pending,
   onPublish,
   headingRef,
+  error,
 }: Readonly<{
   review: PublishReview;
   pending: boolean;
   onPublish(): void;
   headingRef?: Ref<HTMLHeadingElement>;
+  error?: string | null;
 }>) {
   return (
     <section aria-labelledby="review-step-heading" className="record-form">
@@ -38,8 +40,9 @@ export function ReviewStep({
         <summary>SHA-256 doğrulamasını göster</summary>
         <code>{review.sha256}</code>
       </details>
+      {error ? <p aria-live="assertive" role="alert">{error}</p> : null}
       <button className="primary-button" disabled={pending} onClick={onPublish} type="button">
-        Yayınla
+        {error ? 'Tekrar yayınla' : 'Yayınla'}
       </button>
     </section>
   );
