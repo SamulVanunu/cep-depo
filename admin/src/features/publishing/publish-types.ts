@@ -6,7 +6,8 @@ export type SelectedPublishApp = PublishAppOption & Readonly<{
   isNew: boolean;
 }>;
 
-export type PublishDraftReview = Readonly<{
+export type PublishReview = Readonly<{
+  app: SelectedPublishApp;
   versionId: string;
   versionName: string;
   versionCode: number;
@@ -19,5 +20,5 @@ export type PublishDraftReview = Readonly<{
 export type PublishWizardState = Readonly<{
   step: PublishStep;
   app: SelectedPublishApp | null;
-  review: PublishDraftReview | null;
+  review: PublishReview | null;
 }>;

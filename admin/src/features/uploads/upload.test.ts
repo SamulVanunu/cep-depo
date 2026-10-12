@@ -65,15 +65,17 @@ describe('APK upload contracts', () => {
   it('uses 6 MiB TUS chunks and resumes the prior fingerprint', async () => {
     const resumeFromPreviousUpload = vi.fn();
     const start = vi.fn();
+    const abort = vi.fn(async () => undefined);
     const Constructor = vi.fn(function (_file, options) {
       return {
         options,
         findPreviousUploads: async () => [{ uploadUrl: 'prior' }],
         resumeFromPreviousUpload,
         start,
+        abort,
       };
     }) as unknown as TusUploadConstructor;
-    await startTusUpload(
+    const handle = await startTusUpload(
       { endpoint: 'https://project.storage.supabase.co/storage/v1/upload/resumable/sign', bucket: 'apk-drafts', path: 'operations/id/source.apk', token: 'token' },
       new File(['PK'], 'release.apk', { type: 'application/vnd.android.package-archive' }),
       {},
@@ -85,6 +87,11 @@ describe('APK upload contracts', () => {
     }));
     expect(resumeFromPreviousUpload).toHaveBeenCalledWith({ uploadUrl: 'prior' });
     expect(start).toHaveBeenCalledOnce();
+    expect(Object.isFrozen(handle)).toBe(true);
+    expect(Object.keys(handle)).toEqual(['abort']);
+    await handle.abort(true);
+    expect(abort).toHaveBeenCalledOnce();
+    expect(abort).toHaveBeenCalledWith(true);
   });
 
   it.each([

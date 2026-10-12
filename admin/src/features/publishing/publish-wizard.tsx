@@ -7,7 +7,9 @@ import type { ActionResult } from '../../server/errors/action-error';
 import { createQuickAppAction } from '../apps/app-actions';
 import { requestAssetUploadAction, setAppIconAction } from '../apps/asset-actions';
 import type { PublishAppOption } from '../apps/publish-app-options';
+import { ApkStep, type ApkStepDependencies } from './apk-step';
 import { AppStep } from './app-step';
+import { ReviewStep } from './review-step';
 import type { PublishWizardState, SelectedPublishApp } from './publish-types';
 
 type QuickAppResult = ActionResult<Readonly<{
@@ -22,6 +24,7 @@ type PublishWizardProps = Readonly<{
   initialSelectionInvalid: boolean;
   createQuickApp?: (input: Readonly<{ title: string; shortDescription: string }>) => Promise<QuickAppResult>;
   uploadIcon?: (appId: string, file: File) => Promise<void>;
+  apkDependencies?: ApkStepDependencies;
 }>;
 
 async function uploadAppIcon(appId: string, file: File): Promise<void> {
@@ -48,16 +51,17 @@ export function PublishWizard({
   initialSelectionInvalid,
   createQuickApp = createQuickAppAction,
   uploadIcon = uploadAppIcon,
+  apkDependencies,
 }: PublishWizardProps) {
   const [state, setState] = useState<PublishWizardState>({
     step: 'app',
     app: initialApp ? { ...initialApp, isNew: false } : null,
     review: null,
   });
-  const apkHeadingRef = useRef<HTMLHeadingElement>(null);
+  const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    if (state.step === 'apk') apkHeadingRef.current?.focus();
+    if (state.step === 'review') reviewHeadingRef.current?.focus();
   }, [state.step]);
 
   function continueWithApp(app: SelectedPublishApp) {
@@ -91,13 +95,20 @@ export function PublishWizard({
       ) : null}
 
       {state.step === 'apk' ? (
-        <section aria-labelledby="apk-step-heading" className="record-form">
-          <div>
-            <p className="eyebrow">2. adım</p>
-            <h2 id="apk-step-heading" ref={apkHeadingRef} tabIndex={-1}>APK bilgileri</h2>
-            <p className="muted">{state.app?.title} için yeni APK sürümünü hazırlayacaksın.</p>
-          </div>
-        </section>
+        <ApkStep
+          app={state.app!}
+          dependencies={apkDependencies}
+          onComplete={review => setState(current => ({ ...current, step: 'review', review }))}
+        />
+      ) : null}
+
+      {state.step === 'review' && state.review ? (
+        <ReviewStep
+          headingRef={reviewHeadingRef}
+          onPublish={() => undefined}
+          pending={false}
+          review={state.review}
+        />
       ) : null}
     </div>
   );

@@ -15,15 +15,18 @@ export type TusCallbacks = Readonly<{
 }>;
 
 type TusOptions = ConstructorParameters<typeof tus.Upload>[1];
-type TusInstance = Pick<tus.Upload, 'findPreviousUploads' | 'resumeFromPreviousUpload' | 'start'>;
+type TusInstance = Pick<tus.Upload, 'abort' | 'findPreviousUploads' | 'resumeFromPreviousUpload' | 'start'>;
 export type TusUploadConstructor = new (file: File, options: TusOptions) => TusInstance;
+export type TusUploadHandle = Readonly<{
+  abort(shouldTerminate?: boolean): Promise<void>;
+}>;
 
 export async function startTusUpload(
   intent: TusIntent,
   file: File,
   callbacks: TusCallbacks,
   UploadConstructor: TusUploadConstructor = tus.Upload,
-) {
+): Promise<TusUploadHandle> {
   const upload = new UploadConstructor(file, {
     endpoint: intent.endpoint,
     retryDelays: [0, 3000, 5000, 10000, 20000],
@@ -44,5 +47,7 @@ export async function startTusUpload(
   const previous = await upload.findPreviousUploads();
   if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
   upload.start();
-  return upload;
+  return Object.freeze({
+    abort: (shouldTerminate?: boolean) => upload.abort(shouldTerminate),
+  });
 }
