@@ -142,11 +142,14 @@ Supabase Dashboard'dan ilk kullanıcı oluşturulurken `user_metadata.username` 
 
 ## APK indirme davranışı
 
-- APK URL'si yalnız Supabase'in public `apks` bucket'ından oluşturulur ve HTTPS değilse açılmaz.
-- Platform URL'yi başarıyla açmadan yerel geçmiş veya indirme metriği yazılmaz.
+- APK URL'si yalnız Supabase'in public `apks` bucket'ından oluşturulur ve HTTPS değilse indirme başlamaz.
+- Android APK'yı uygulamanın cache alanına indirir; ekranda ilerleme, iptal ve tekrar deneme sunulur.
+- İndirilen dosyanın byte boyutu, ZIP/APK imzası ve SHA-256 özeti katalog kaydıyla eşleşmeden installer açılmaz.
+- Doğrulama tamamlanınca Android sistem installer'ı otomatik açılır; kullanıcı uygulamaya dönerse `TEKRAR KUR` kullanılabilir.
+- Installer başarıyla açılmadan yerel geçmiş veya indirme metriği yazılmaz.
 - Yerel geçmiş, açılan en yüksek `version_code` değerini bu cihazda saklar.
 - `GÜNCELLE`, yalnız katalogdaki sürüm kodu yerel geçmişten büyük olduğunda görünür.
-- URL'nin açılması dosyanın indirildiğini veya kurulduğunu kanıtlamaz; uygulama bu konuda iddiada bulunmaz.
+- Installer'ın açılması kurulumun tamamlandığını kanıtlamaz; uygulama bu konuda iddiada bulunmaz.
 - Anonim metrik, installation UUID + sürüm için idempotenttir ve kullanıcı hesabı gerektirmez.
 
 ## Hesap ve topluluk davranışı

@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
 import { type Href, Stack, useRouter } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 
@@ -9,6 +10,9 @@ import { BootstrapGate } from '../src/features/bootstrap/BootstrapGate';
 import { handleAuthCallback } from '../src/features/auth/auth-links';
 import { getPublicEnv } from '../src/lib/env';
 import { getSupabaseClient } from '../src/lib/supabase';
+
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
+SplashScreen.setOptions({ duration: 220, fade: true });
 
 async function prepareStartup() {
   // AuthProvider owns session loading while the bootstrap animation is visible.
@@ -54,12 +58,16 @@ export default function RootLayout() {
   try {
     getPublicEnv();
   } catch {
-    return <ConfigurationErrorScreen />;
+    return (
+      <BootstrapGate hideNativeSplash={SplashScreen.hide} startup={prepareStartup}>
+        <ConfigurationErrorScreen />
+      </BootstrapGate>
+    );
   }
 
   return (
     <AppProviders>
-      <BootstrapGate startup={prepareStartup}>
+      <BootstrapGate hideNativeSplash={SplashScreen.hide} startup={prepareStartup}>
         <AuthLinkHandler />
         <StatusBar style="light" />
         <Stack

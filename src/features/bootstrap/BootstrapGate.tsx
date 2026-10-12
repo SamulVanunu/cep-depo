@@ -12,6 +12,7 @@ type AnimationValues = Readonly<{
 type BootstrapGateProps = PropsWithChildren<{
   startup: () => Promise<unknown>;
   getReduceMotion?: () => Promise<boolean>;
+  hideNativeSplash?: () => void;
   runExitAnimation?: (values: AnimationValues, complete: () => void) => void;
 }>;
 
@@ -34,6 +35,7 @@ export function BootstrapGate({
   children,
   startup,
   getReduceMotion = AccessibilityInfo.isReduceMotionEnabled,
+  hideNativeSplash = () => undefined,
   runExitAnimation = defaultExitAnimation,
 }: BootstrapGateProps) {
   const [ready, setReady] = useState(false);
@@ -41,6 +43,10 @@ export function BootstrapGate({
     opacity: new Animated.Value(1),
     scale: new Animated.Value(1),
   }));
+
+  useEffect(() => {
+    hideNativeSplash();
+  }, [hideNativeSplash]);
 
   useEffect(() => {
     let active = true;

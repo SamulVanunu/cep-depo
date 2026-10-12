@@ -12,6 +12,23 @@ function deferred() {
 }
 
 describe('BootstrapGate', () => {
+  it('hides the native splash once the dark JavaScript loading screen is mounted', async () => {
+    const startup = deferred();
+    const hideNativeSplash = jest.fn();
+    render(
+      <BootstrapGate
+        getReduceMotion={async () => true}
+        hideNativeSplash={hideNativeSplash}
+        startup={() => startup.promise}
+      >
+        <ReadyContent />
+      </BootstrapGate>,
+    );
+
+    await waitFor(() => expect(hideNativeSplash).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('Cep Depo açılıyor')).toBeTruthy();
+  });
+
   it('keeps the logo visible only while required startup work is pending', async () => {
     const startup = deferred();
     render(

@@ -3,23 +3,37 @@
     "name": "Cep Depo",
     "slug": "cep-depo",
     "scheme": "cepdepo",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "icon": "./assets/app-icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "android": {
       "package": "com.cepdepo.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#101216"
       },
-      "permissions": []
+      "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ]
     },
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#111315",
+          "image": "./assets/app-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#111315",
+            "image": "./assets/app-icon.png"
+          }
+        }
+      ],
       "expo-font",
       [
         "expo-image-picker",

@@ -1,10 +1,9 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { AppDetailScreen } from '../../../src/features/catalog/AppDetailScreen';
 import { useCatalogApp } from '../../../src/features/catalog/catalog.queries';
 import type { CatalogApp } from '../../../src/features/catalog/catalog.types';
-import { openApkDownload } from '../../../src/features/downloads/open-apk-download';
+import { ApkDownloadPanel } from '../../../src/features/downloads/ApkDownloadPanel';
 import { useDownloadedVersion } from '../../../src/features/downloads/useDownloadedVersion';
 
 const mockBack = jest.fn();
@@ -17,9 +16,16 @@ jest.mock('../../../src/features/catalog/catalog.queries', () => ({
   useCatalogApp: jest.fn(),
 }));
 
-jest.mock('../../../src/features/downloads/open-apk-download', () => ({
-  openApkDownload: jest.fn(),
-}));
+jest.mock('../../../src/features/downloads/ApkDownloadPanel', () => {
+  const { Text } = require('react-native');
+  return {
+    ApkDownloadPanel: jest.fn(({ action }: { action: 'download' | 'update' }) => (
+      <Text accessibilityRole="button">
+        {action === 'update' ? 'GÜNCELLE' : 'APK İNDİR'}
+      </Text>
+    )),
+  };
+});
 
 jest.mock('../../../src/features/downloads/useDownloadedVersion', () => ({
   useDownloadedVersion: jest.fn(),
@@ -88,7 +94,7 @@ const app: CatalogApp = {
 };
 
 const mockUseCatalogApp = useCatalogApp as jest.MockedFunction<typeof useCatalogApp>;
-const mockOpenApkDownload = openApkDownload as jest.MockedFunction<typeof openApkDownload>;
+const mockApkDownloadPanel = ApkDownloadPanel as jest.MockedFunction<typeof ApkDownloadPanel>;
 const mockUseDownloadedVersion = useDownloadedVersion as jest.MockedFunction<typeof useDownloadedVersion>;
 
 function queryResult(overrides: Record<string, unknown>) {
@@ -106,7 +112,6 @@ describe('AppDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseDownloadedVersion.mockReturnValue({ downloadedVersion: undefined, refresh: jest.fn() });
-    mockOpenApkDownload.mockResolvedValue({ metricsRecorded: true });
   });
 
   it('renders icon, description, ordered screenshots and descending published versions', () => {
@@ -164,21 +169,27 @@ describe('AppDetailScreen', () => {
     render(<AppDetailScreen resolveAssetUrl={path => path} slug="cep-iptv" />);
 
     expect(screen.getByRole('button', { name: 'GÜNCELLE' })).toBeTruthy();
-    expect(screen.getByText('İndirme, kurulumun tamamlandığı anlamına gelmez.')).toBeTruthy();
+    expect(mockApkDownloadPanel.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ action: 'update' }));
   });
 
-  it('surfaces URL-open failures with a Turkish retry action', async () => {
+  it('passes APK integrity metadata and history refresh to the in-app downloader', () => {
     mockUseCatalogApp.mockReturnValue(queryResult({ data: app }));
-    mockOpenApkDownload.mockRejectedValue(new Error('blocked'));
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const refresh = jest.fn(async () => undefined);
+    mockUseDownloadedVersion.mockReturnValue({ downloadedVersion: undefined, refresh });
     render(<AppDetailScreen resolveAssetUrl={path => path} slug="cep-iptv" />);
 
-    fireEvent.press(screen.getByRole('button', { name: 'APK İNDİR' }));
-
-    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
-    const buttons = alert.mock.calls[0]?.[2];
-    expect(alert.mock.calls[0]?.[0]).toBe('İndirme başlatılamadı.');
-    expect(buttons?.map(button => button.text)).toContain('Tekrar dene');
+    expect(mockApkDownloadPanel.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({
+      action: 'download',
+      input: {
+        appId: 'app-1',
+        versionId: 'version-12',
+        versionCode: 12,
+        apkPath: 'apps/app-1/versions/version-12.apk',
+        apkSizeBytes: 24_000_000,
+        sha256: 'b'.repeat(64),
+      },
+      onInstallerOpened: refresh,
+    }));
   });
 
   it('opens reports only for the loaded app and its loaded versions', () => {
