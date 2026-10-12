@@ -1,0 +1,104 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+
+import { createBrowserSupabaseClient } from '../../lib/supabase/browser';
+import type { ActionResult } from '../../server/errors/action-error';
+import { createQuickAppAction } from '../apps/app-actions';
+import { requestAssetUploadAction, setAppIconAction } from '../apps/asset-actions';
+import type { PublishAppOption } from '../apps/publish-app-options';
+import { AppStep } from './app-step';
+import type { PublishWizardState, SelectedPublishApp } from './publish-types';
+
+type QuickAppResult = ActionResult<Readonly<{
+  id: string;
+  slug: string;
+  status: 'archived';
+}>>;
+
+type PublishWizardProps = Readonly<{
+  apps: readonly PublishAppOption[];
+  initialApp: PublishAppOption | null;
+  initialSelectionInvalid: boolean;
+  createQuickApp?: (input: Readonly<{ title: string; shortDescription: string }>) => Promise<QuickAppResult>;
+  uploadIcon?: (appId: string, file: File) => Promise<void>;
+}>;
+
+async function uploadAppIcon(appId: string, file: File): Promise<void> {
+  const intent = await requestAssetUploadAction({
+    appId,
+    kind: 'icon',
+    fileName: file.name,
+    mimeType: file.type,
+    size: file.size,
+  });
+  if (!intent.ok) throw new Error('asset-intent-failed');
+  const client = createBrowserSupabaseClient();
+  const uploaded = await client.storage
+    .from(intent.data.bucket)
+    .uploadToSignedUrl(intent.data.path, intent.data.token, file, { contentType: file.type });
+  if (uploaded.error) throw new Error('asset-upload-failed');
+  const saved = await setAppIconAction(appId, intent.data.path);
+  if (!saved.ok) throw new Error('asset-save-failed');
+}
+
+export function PublishWizard({
+  apps,
+  initialApp,
+  initialSelectionInvalid,
+  createQuickApp = createQuickAppAction,
+  uploadIcon = uploadAppIcon,
+}: PublishWizardProps) {
+  const [state, setState] = useState<PublishWizardState>({
+    step: 'app',
+    app: initialApp ? { ...initialApp, isNew: false } : null,
+    review: null,
+  });
+  const apkHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (state.step === 'apk') apkHeadingRef.current?.focus();
+  }, [state.step]);
+
+  function continueWithApp(app: SelectedPublishApp) {
+    setState(current => ({ ...current, step: 'apk', app }));
+  }
+
+  return (
+    <div className="publish-wizard">
+      <ol aria-label="Yayın adımları" className="wizard-steps">
+        {[
+          ['app', 'Uygulama'],
+          ['apk', 'APK'],
+          ['review', 'Kontrol ve yayın'],
+        ].map(([step, label], index) => (
+          <li aria-current={state.step === step ? 'step' : undefined} key={step}>{index + 1}. {label}</li>
+        ))}
+      </ol>
+
+      {initialSelectionInvalid && state.step === 'app' ? (
+        <p className="notice" role="status">Uygulama seçimi bulunamadı. Listeden başka bir uygulama seçebilirsin.</p>
+      ) : null}
+
+      {state.step === 'app' ? (
+        <AppStep
+          apps={apps}
+          createQuickApp={createQuickApp}
+          onContinue={continueWithApp}
+          selectedApp={state.app}
+          uploadIcon={uploadIcon}
+        />
+      ) : null}
+
+      {state.step === 'apk' ? (
+        <section aria-labelledby="apk-step-heading" className="record-form">
+          <div>
+            <p className="eyebrow">2. adım</p>
+            <h2 id="apk-step-heading" ref={apkHeadingRef} tabIndex={-1}>APK bilgileri</h2>
+            <p className="muted">{state.app?.title} için yeni APK sürümünü hazırlayacaksın.</p>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
