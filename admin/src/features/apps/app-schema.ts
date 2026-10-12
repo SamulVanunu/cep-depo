@@ -21,7 +21,10 @@ const slugSchema = z.string().transform(normalizeSlug).pipe(
 );
 
 export const appFormSchema = z.object({
-  categoryId: z.string().uuid(),
+  categoryId: z.preprocess(
+    value => value === '' ? null : value,
+    z.string().uuid().nullable(),
+  ),
   slug: slugSchema,
   title: z.string().trim().min(2).max(90),
   shortDescription: z.string().trim().min(10).max(180),
@@ -29,6 +32,14 @@ export const appFormSchema = z.object({
   featured: z.boolean(),
   status: z.enum(['active', 'archived']),
 });
+
+export const quickAppSchema = z.object({
+  title: z.string().trim().min(2).max(90),
+  shortDescription: z.string().trim().min(10).max(180),
+}).transform(input => ({
+  ...input,
+  slug: slugSchema.parse(input.title),
+}));
 
 export const categoryFormSchema = z.object({
   name: z.string().trim().min(2).max(90),
@@ -58,6 +69,10 @@ export function parseAppFormData(formData: FormData) {
     featured: checkbox(formData.get('featured')),
     status: formData.get('status'),
   });
+}
+
+export function parseQuickAppInput(raw: unknown) {
+  return quickAppSchema.parse(raw);
 }
 
 export function parseCategoryFormData(formData: FormData) {

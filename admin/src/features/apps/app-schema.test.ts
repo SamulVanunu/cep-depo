@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { appFormSchema, categoryFormSchema, parseAppFormData } from './app-schema';
+import {
+  appFormSchema,
+  categoryFormSchema,
+  parseAppFormData,
+  parseQuickAppInput,
+} from './app-schema';
 
 function validAppData(): FormData {
   const data = new FormData();
@@ -37,6 +42,34 @@ describe('catalog schemas', () => {
     expect(parseAppFormData(data)).not.toHaveProperty('download_count');
     expect(parseAppFormData(data)).not.toHaveProperty('created_at');
     expect(parseAppFormData(data)).not.toHaveProperty('icon_path');
+  });
+
+  it('uses a null category when the full app form leaves category empty', () => {
+    const data = validAppData();
+    data.set('categoryId', '');
+
+    expect(parseAppFormData(data).categoryId).toBeNull();
+  });
+
+  it('normalizes quick app input and ignores client-owned system fields', () => {
+    expect(parseQuickAppInput({
+      title: '  Çağrı Öz  ',
+      shortDescription: 'Yeni uygulama için yeterli kısa açıklama.',
+      categoryId: 'a1000000-0000-4000-8000-000000000001',
+      featured: true,
+      status: 'active',
+    })).toEqual({
+      title: 'Çağrı Öz',
+      shortDescription: 'Yeni uygulama için yeterli kısa açıklama.',
+      slug: 'cagri-oz',
+    });
+  });
+
+  it('rejects quick app titles and descriptions outside database bounds', () => {
+    expect(() => parseQuickAppInput({ title: 'x', shortDescription: 'Yeterince uzun' })).toThrow();
+    expect(() => parseQuickAppInput({ title: 'Geçerli', shortDescription: 'kısa' })).toThrow();
+    expect(() => parseQuickAppInput({ title: 'x'.repeat(91), shortDescription: 'Yeterince uzun' })).toThrow();
+    expect(() => parseQuickAppInput({ title: 'Geçerli', shortDescription: 'x'.repeat(181) })).toThrow();
   });
 
   it('validates category name, slug, position and active state', () => {

@@ -6,6 +6,12 @@ import type { ListParams } from '../../lib/search-params';
 import { requireAdmin } from '../../server/auth/require-admin';
 import { ActionException } from '../../server/errors/action-error';
 import { getAdminClient } from '../../server/supabase/admin-client';
+import {
+  mapPublishAppOptions,
+  type PublishAppOption,
+} from './publish-app-options';
+
+export type { PublishAppOption } from './publish-app-options';
 
 export type CategoryOption = Readonly<{
   id: string;
@@ -61,6 +67,17 @@ export async function listApps(params: ListParams) {
     page: params.page,
     pageSize: params.pageSize,
   };
+}
+
+export async function listPublishApps(): Promise<readonly PublishAppOption[]> {
+  const identity = await requireAdmin();
+  const client = getAdminClient(identity);
+  const { data, error } = await client
+    .from('apps')
+    .select('id, title, slug, status, icon_path, app_versions(version_code)')
+    .order('title');
+  if (error) throw new ActionException('TEMPORARY');
+  return mapPublishAppOptions(data ?? []);
 }
 
 export async function getApp(appId: string) {

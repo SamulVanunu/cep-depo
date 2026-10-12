@@ -4,6 +4,7 @@ import {
   archiveApp,
   createApp,
   createCategory,
+  createQuickApp,
   type CatalogActionDependencies,
 } from './app-actions';
 import {
@@ -15,9 +16,9 @@ const actorId = 'a1000000-0000-4000-8000-000000000001';
 const appId = 'a2000000-0000-4000-8000-000000000001';
 const categoryId = 'a3000000-0000-4000-8000-000000000001';
 
-function appForm(): FormData {
+function appForm(selectedCategoryId: string | null = categoryId): FormData {
   const data = new FormData();
-  data.set('categoryId', categoryId);
+  data.set('categoryId', selectedCategoryId ?? '');
   data.set('slug', 'ornek-uygulama');
   data.set('title', 'Örnek Uygulama');
   data.set('shortDescription', 'Yeterince uzun kısa açıklama');
@@ -33,6 +34,7 @@ function catalogDependencies(
   return {
     authorize: vi.fn(async () => ({ userId: actorId })),
     categoryExists: vi.fn(async () => true),
+    getDefaultCategoryId: vi.fn(async () => categoryId),
     insertApp: vi.fn(async () => ({ data: { id: appId }, error: null })),
     updateApp: vi.fn(async () => ({ error: null })),
     insertCategory: vi.fn(async () => ({ data: { id: categoryId }, error: null })),
@@ -82,6 +84,99 @@ describe('catalog actions', () => {
 
     expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
     expect(insertApp).not.toHaveBeenCalled();
+  });
+
+  it('uses the default category when the full form leaves category empty', async () => {
+    const getDefaultCategoryId = vi.fn(async () => categoryId);
+    const insertApp = vi.fn(async () => ({ data: { id: appId }, error: null }));
+
+    const result = await createApp(
+      appForm(null),
+      catalogDependencies({ getDefaultCategoryId, insertApp }),
+    );
+
+    expect(result).toMatchObject({ ok: true, data: { id: appId } });
+    expect(getDefaultCategoryId).toHaveBeenCalledOnce();
+    expect(insertApp).toHaveBeenCalledWith(expect.objectContaining({ category_id: categoryId }));
+  });
+
+  it('preserves an explicit valid category without reading the default', async () => {
+    const getDefaultCategoryId = vi.fn();
+    const insertApp = vi.fn(async () => ({ data: { id: appId }, error: null }));
+
+    const result = await createApp(
+      appForm(categoryId),
+      catalogDependencies({ getDefaultCategoryId, insertApp }),
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    expect(getDefaultCategoryId).not.toHaveBeenCalled();
+    expect(insertApp).toHaveBeenCalledWith(expect.objectContaining({ category_id: categoryId }));
+  });
+
+  it('fails safely when no default category exists', async () => {
+    const insertApp = vi.fn();
+
+    const result = await createApp(
+      appForm(null),
+      catalogDependencies({ getDefaultCategoryId: vi.fn(async () => null), insertApp }),
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    expect(insertApp).not.toHaveBeenCalled();
+  });
+
+  it('creates a quick app as archived with only server-owned defaults', async () => {
+    const insertApp = vi.fn(async () => ({ data: { id: appId }, error: null }));
+    const recordAudit = vi.fn(async () => ({ error: null }));
+
+    const result = await createQuickApp(
+      {
+        title: 'Çağrı Öz',
+        shortDescription: 'Yeni uygulama için yeterli kısa açıklama.',
+        categoryId,
+        featured: true,
+        status: 'active',
+      },
+      catalogDependencies({ insertApp, recordAudit }),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      data: { id: appId, slug: 'cagri-oz', status: 'archived' },
+    });
+    expect(insertApp).toHaveBeenCalledWith({
+      category_id: categoryId,
+      slug: 'cagri-oz',
+      title: 'Çağrı Öz',
+      short_description: 'Yeni uygulama için yeterli kısa açıklama.',
+      description: 'Yeni uygulama için yeterli kısa açıklama.',
+      featured: false,
+      status: 'archived',
+    });
+    expect(recordAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'app.create',
+      metadata: { status: 'archived' },
+    }));
+  });
+
+  it('maps duplicate quick app submission to one success and one safe conflict', async () => {
+    const insertApp = vi.fn()
+      .mockResolvedValueOnce({ data: { id: appId }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { code: '23505' } });
+    const recordAudit = vi.fn(async () => ({ error: null }));
+    const dependencies = catalogDependencies({ insertApp, recordAudit });
+    const input = {
+      title: 'Tek Uygulama',
+      shortDescription: 'Tekrarlı gönderimi engelleyen açıklama.',
+    };
+
+    await expect(createQuickApp(input, dependencies)).resolves.toMatchObject({ ok: true });
+    await expect(createQuickApp(input, dependencies)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    expect(recordAudit).toHaveBeenCalledTimes(1);
   });
 
   it('maps a unique category slug conflict safely', async () => {

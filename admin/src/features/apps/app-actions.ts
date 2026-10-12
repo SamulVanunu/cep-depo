@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { requireAdmin } from '../../server/auth/require-admin';
 import type { ActionError, ActionResult } from '../../server/errors/action-error';
 import { ActionException, toActionError } from '../../server/errors/action-error';
-import { parseAppFormData, parseCategoryFormData } from './app-schema';
+import { parseAppFormData, parseCategoryFormData, parseQuickAppInput } from './app-schema';
 
 type MutationError = Readonly<{ code?: string; message?: string }> | null;
 type Actor = Readonly<{ userId: string }>;
@@ -22,6 +22,7 @@ type AuditInput = Readonly<{
 export type CatalogActionDependencies = Readonly<{
   authorize(): Promise<Actor>;
   categoryExists(categoryId: string): Promise<boolean>;
+  getDefaultCategoryId(): Promise<string | null>;
   insertApp(input: Readonly<Record<string, unknown>>): Promise<{
     data: Readonly<{ id: string }> | null;
     error: MutationError;
@@ -65,6 +66,17 @@ function defaultDependencies(): CatalogActionDependencies {
       if (error) throw error;
       return Boolean(data);
     },
+    async getDefaultCategoryId() {
+      const db = await database();
+      const { data, error } = await db
+        .from('categories')
+        .select('id')
+        .eq('is_default', true)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.id ?? null;
+    },
     async insertApp(input) {
       const db = await database();
       return db.from('apps').insert(input as never).select('id').single();
@@ -95,6 +107,20 @@ function defaultDependencies(): CatalogActionDependencies {
   };
 }
 
+export async function resolveAppCategoryId(
+  requestedCategoryId: string | null,
+  dependencies: Pick<CatalogActionDependencies, 'categoryExists' | 'getDefaultCategoryId'>,
+): Promise<string> {
+  if (requestedCategoryId) {
+    if (await dependencies.categoryExists(requestedCategoryId)) return requestedCategoryId;
+    throw new ActionException('VALIDATION');
+  }
+
+  const defaultCategoryId = await dependencies.getDefaultCategoryId();
+  if (!defaultCategoryId) throw new ActionException('VALIDATION');
+  return defaultCategoryId;
+}
+
 async function auditMutation(
   dependencies: CatalogActionDependencies,
   input: AuditInput,
@@ -110,12 +136,10 @@ export async function createApp(
   try {
     const actor = await dependencies.authorize();
     const input = parseAppFormData(formData);
-    if (!(await dependencies.categoryExists(input.categoryId))) {
-      throw new ActionException('VALIDATION');
-    }
+    const categoryId = await resolveAppCategoryId(input.categoryId, dependencies);
 
     const insert = await dependencies.insertApp({
-      category_id: input.categoryId,
+      category_id: categoryId,
       slug: input.slug,
       title: input.title,
       short_description: input.shortDescription,
@@ -152,9 +176,9 @@ export async function updateApp(
     const id = z.string().uuid().parse(appId);
     const actor = await dependencies.authorize();
     const input = parseAppFormData(formData);
-    if (!(await dependencies.categoryExists(input.categoryId))) throw new ActionException('VALIDATION');
+    const categoryId = await resolveAppCategoryId(input.categoryId, dependencies);
     const update = await dependencies.updateApp(id, {
-      category_id: input.categoryId,
+      category_id: categoryId,
       slug: input.slug,
       title: input.title,
       short_description: input.shortDescription,
@@ -172,6 +196,60 @@ export async function updateApp(
     });
     dependencies.revalidate?.(`/apps/${id}`);
     return { ok: true, data: { id, ...(auditWarning ? { auditWarning } : {}) } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toActionError(error instanceof z.ZodError ? new ActionException('VALIDATION') : error),
+    };
+  }
+}
+
+type QuickAppData = Readonly<{
+  id: string;
+  slug: string;
+  status: 'archived';
+  auditWarning?: ActionError;
+}>;
+
+export async function createQuickApp(
+  raw: unknown,
+  dependencies: CatalogActionDependencies = defaultDependencies(),
+): Promise<ActionResult<QuickAppData>> {
+  try {
+    const actor = await dependencies.authorize();
+    const input = parseQuickAppInput(raw);
+    const categoryId = await resolveAppCategoryId(null, dependencies);
+    const insert = await dependencies.insertApp({
+      category_id: categoryId,
+      slug: input.slug,
+      title: input.title,
+      short_description: input.shortDescription,
+      description: input.shortDescription,
+      featured: false,
+      status: 'archived',
+    });
+    if (insert.error) throw insert.error;
+    if (!insert.data) throw new ActionException('INTERNAL');
+
+    const auditWarning = await auditMutation(dependencies, {
+      actorId: actor.userId,
+      action: 'app.create',
+      targetType: 'app',
+      targetId: insert.data.id,
+      metadata: { status: 'archived' },
+    });
+    dependencies.revalidate?.('/');
+    dependencies.revalidate?.('/publish');
+    dependencies.revalidate?.('/apps');
+    return {
+      ok: true,
+      data: {
+        id: insert.data.id,
+        slug: input.slug,
+        status: 'archived',
+        ...(auditWarning ? { auditWarning } : {}),
+      },
+    };
   } catch (error) {
     return {
       ok: false,
@@ -276,6 +354,10 @@ export async function createAppAction(
   formData: FormData,
 ) {
   return createApp(formData);
+}
+
+export async function createQuickAppAction(raw: unknown) {
+  return createQuickApp(raw);
 }
 
 export async function updateAppAction(
