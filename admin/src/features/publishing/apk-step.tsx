@@ -2,10 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { getPublicEnv } from '../../lib/env';
 import { cleanupOrphanUploadAction } from '../uploads/orphan-cleanup';
 import { hashFile } from '../uploads/hash-file';
-import { resumableUploadEndpoint } from '../uploads/upload-endpoint';
 import {
   startTusUpload,
   type TusCallbacks,
@@ -22,7 +20,7 @@ export type ApkStepDependencies = Readonly<{
   hashFile: typeof hashFile;
   createUploadIntent: typeof createUploadIntentAction;
   startUpload(
-    intent: Omit<TusIntent, 'endpoint'>,
+    intent: TusIntent,
     file: File,
     callbacks: TusCallbacks,
   ): Promise<TusUploadHandle>;
@@ -33,10 +31,7 @@ export type ApkStepDependencies = Readonly<{
 const defaultDependencies: ApkStepDependencies = {
   hashFile,
   createUploadIntent: createUploadIntentAction,
-  startUpload: (intent, file, callbacks) => startTusUpload({
-    ...intent,
-    endpoint: resumableUploadEndpoint(getPublicEnv().supabaseUrl),
-  }, file, callbacks),
+  startUpload: (intent, file, callbacks) => startTusUpload(intent, file, callbacks),
   finalizeUpload: finalizeUploadAction,
   cleanupOrphan: cleanupOrphanUploadAction,
 };

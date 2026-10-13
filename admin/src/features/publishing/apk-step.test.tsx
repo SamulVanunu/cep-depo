@@ -34,6 +34,7 @@ function dependencies(overrides: Partial<ApkStepDependencies> = {}): ApkStepDepe
     createUploadIntent: vi.fn(async () => ({
       ok: true as const,
       data: {
+        endpoint: 'https://project.storage.supabase.co/storage/v1/upload/resumable/sign',
         operationId: 'a3000000-0000-4000-8000-000000000001',
         bucket: 'apk-drafts' as const,
         path,

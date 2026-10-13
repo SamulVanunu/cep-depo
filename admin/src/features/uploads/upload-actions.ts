@@ -9,6 +9,7 @@ import { requireAdmin } from '../../server/auth/require-admin';
 import { getServerEnv } from '../../lib/env';
 import type { Json } from '../../types/database.types';
 import { storageAuthHeaders } from './storage-auth-headers';
+import { resumableUploadEndpoint } from './upload-endpoint';
 
 type Actor = Readonly<{ userId: string }>;
 type StorageInspection = Readonly<{ size: number; mimeType: string }>;
@@ -205,7 +206,15 @@ function defaultDependencies(): UploadActionDependencies {
 }
 
 export async function createUploadIntentAction(raw: RawUploadIntent) {
-  return createUploadIntent(raw, defaultDependencies());
+  const result = await createUploadIntent(raw, defaultDependencies());
+  if (!result.ok) return result;
+  return {
+    ...result,
+    data: {
+      ...result.data,
+      endpoint: resumableUploadEndpoint(getServerEnv().supabaseUrl),
+    },
+  };
 }
 
 export async function finalizeUploadAction(raw: z.input<typeof finalizeUploadSchema>) {
