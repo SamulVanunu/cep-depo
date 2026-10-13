@@ -2,6 +2,7 @@ import * as tus from 'tus-js-client';
 
 export type TusIntent = Readonly<{
   endpoint: string;
+  publishableKey: string;
   bucket: 'apk-drafts';
   path: string;
   token: string;
@@ -30,7 +31,7 @@ export async function startTusUpload(
   const upload = new UploadConstructor(file, {
     endpoint: intent.endpoint,
     retryDelays: [0, 3000, 5000, 10000, 20000],
-    headers: { 'x-signature': intent.token },
+    headers: { apikey: intent.publishableKey, 'x-signature': intent.token },
     uploadDataDuringCreation: true,
     removeFingerprintOnSuccess: true,
     chunkSize: 6 * 1024 * 1024,

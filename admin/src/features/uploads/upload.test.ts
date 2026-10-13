@@ -76,14 +76,20 @@ describe('APK upload contracts', () => {
       };
     }) as unknown as TusUploadConstructor;
     const handle = await startTusUpload(
-      { endpoint: 'https://project.storage.supabase.co/storage/v1/upload/resumable/sign', bucket: 'apk-drafts', path: 'operations/id/source.apk', token: 'token' },
+      {
+        endpoint: 'https://project.storage.supabase.co/storage/v1/upload/resumable/sign',
+        publishableKey: 'sb_publishable_example',
+        bucket: 'apk-drafts',
+        path: 'operations/id/source.apk',
+        token: 'token',
+      },
       new File(['PK'], 'release.apk', { type: 'application/vnd.android.package-archive' }),
       {},
       Constructor,
     );
     expect(Constructor).toHaveBeenCalledWith(expect.any(File), expect.objectContaining({
       chunkSize: 6 * 1024 * 1024,
-      headers: { 'x-signature': 'token' },
+      headers: { apikey: 'sb_publishable_example', 'x-signature': 'token' },
     }));
     expect(resumeFromPreviousUpload).toHaveBeenCalledWith({ uploadUrl: 'prior' });
     expect(start).toHaveBeenCalledOnce();

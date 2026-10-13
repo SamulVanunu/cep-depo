@@ -208,11 +208,13 @@ function defaultDependencies(): UploadActionDependencies {
 export async function createUploadIntentAction(raw: RawUploadIntent) {
   const result = await createUploadIntent(raw, defaultDependencies());
   if (!result.ok) return result;
+  const env = getServerEnv();
   return {
     ...result,
     data: {
       ...result.data,
-      endpoint: resumableUploadEndpoint(getServerEnv().supabaseUrl),
+      endpoint: resumableUploadEndpoint(env.supabaseUrl),
+      publishableKey: env.supabasePublishableKey,
     },
   };
 }
