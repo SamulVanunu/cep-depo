@@ -11,7 +11,7 @@ import {
 } from './apk-download';
 import { defaultApkDownloadDependencies } from './native-apk-download';
 
-type DownloadPhase = 'idle' | 'downloading' | 'installing' | 'ready' | 'error';
+type DownloadPhase = 'idle' | 'downloading' | 'cancelling' | 'installing' | 'ready' | 'error';
 
 const initialProgress: ApkDownloadProgress = {
   bytesWritten: 0,
@@ -30,11 +30,15 @@ export function useApkDownload(
   const [error, setError] = useState<string | null>(null);
   const operationRef = useRef<ReturnType<typeof createApkDownloadOperation> | null>(null);
   const busyRef = useRef(false);
+  const cancelRequestedRef = useRef(false);
   const mountedRef = useRef(true);
 
   useEffect(() => () => {
     mountedRef.current = false;
-    operationRef.current?.cancel();
+    if (operationRef.current && !cancelRequestedRef.current) {
+      cancelRequestedRef.current = true;
+      operationRef.current.cancel();
+    }
   }, []);
 
   const openInstaller = useCallback(async (file: DownloadedApk) => {
@@ -60,6 +64,7 @@ export function useApkDownload(
   const start = useCallback(async () => {
     if (busyRef.current || operationRef.current) return;
     busyRef.current = true;
+    cancelRequestedRef.current = false;
     setError(null);
     setDownloadedApk(null);
     setProgress({ ...initialProgress, totalBytes: input.apkSizeBytes });
@@ -71,6 +76,7 @@ export function useApkDownload(
     try {
       const file = await operation.download();
       operationRef.current = null;
+      cancelRequestedRef.current = false;
       if (!mountedRef.current) return;
       setDownloadedApk(file);
       busyRef.current = false;
@@ -78,6 +84,7 @@ export function useApkDownload(
     } catch (downloadError) {
       operationRef.current = null;
       busyRef.current = false;
+      cancelRequestedRef.current = false;
       if (!mountedRef.current) return;
       if (downloadError instanceof ApkDownloadCancelledError) {
         setPhase('idle');
@@ -89,10 +96,11 @@ export function useApkDownload(
   }, [dependencies, input, openInstaller]);
 
   const cancel = useCallback(() => {
-    if (!operationRef.current) return;
+    if (!operationRef.current || cancelRequestedRef.current) return;
+    cancelRequestedRef.current = true;
     operationRef.current.cancel();
     setError(null);
-    setPhase('idle');
+    setPhase('cancelling');
   }, []);
 
   const install = useCallback(async () => {

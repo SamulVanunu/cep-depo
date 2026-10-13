@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { ApkDownloadDependencies } from '../../../src/features/downloads/apk-download';
 import { ApkDownloadPanel } from '../../../src/features/downloads/ApkDownloadPanel';
@@ -11,6 +11,13 @@ const input = {
   apkSizeBytes: 24,
   sha256: 'a'.repeat(64),
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
 
 function dependencies(): ApkDownloadDependencies {
   return {
@@ -43,6 +50,28 @@ describe('ApkDownloadPanel', () => {
     await screen.findByText('%50 · 0.0 / 0.0 MB');
     expect(screen.getByRole('progressbar')).toHaveAccessibilityValue({ min: 0, max: 100, now: 50, text: '%50' });
     expect(screen.getByRole('button', { name: 'İptal' })).toBeTruthy();
+  });
+
+  it('announces cancellation and hides actions until native cleanup settles', async () => {
+    const download = deferred<{ uri: string; size: number }>();
+    const deps = dependencies();
+    (deps.createTask as jest.Mock).mockReturnValue({
+      cancel: jest.fn(),
+      download: jest.fn(() => download.promise),
+      release: jest.fn(),
+    });
+    render(<ApkDownloadPanel action="download" dependencies={deps} input={input} />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'APK İNDİR' }));
+    fireEvent.press(await screen.findByRole('button', { name: 'İptal' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('İndirme iptal edildi. Kısmi dosya temizleniyor.');
+    expect(screen.queryByRole('button', { name: 'İptal' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'APK İNDİR' })).toBeNull();
+
+    await act(async () => download.reject(new Error('native cancellation settled')));
+
+    expect(await screen.findByRole('button', { name: 'APK İNDİR' })).toBeTruthy();
   });
 
   it('shows a re-install action after download and automatic installer launch', async () => {

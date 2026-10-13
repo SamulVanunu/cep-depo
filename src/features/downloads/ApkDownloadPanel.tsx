@@ -45,6 +45,14 @@ export function ApkDownloadPanel({
     );
   }
 
+  if (download.phase === 'cancelling') {
+    return (
+      <AppText accessibilityRole="alert" style={styles.centered} tone="muted">
+        İndirme iptal edildi. Kısmi dosya temizleniyor.
+      </AppText>
+    );
+  }
+
   if (download.phase === 'installing') {
     return <Button label="Kurulum ekranı açılıyor" loading />;
   }

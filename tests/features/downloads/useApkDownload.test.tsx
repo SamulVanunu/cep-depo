@@ -75,7 +75,7 @@ describe('useApkDownload', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('returns to idle immediately while native cancellation is still settling', async () => {
+  it('shows cancellation while native cleanup settles and blocks overlapping retries', async () => {
     const download = deferred<{ uri: string; size: number }>();
     const { deps, task } = dependencies(download);
     task.cancel.mockImplementation(() => undefined);
@@ -87,24 +87,61 @@ describe('useApkDownload', () => {
     act(() => result.current.cancel());
 
     expect(task.cancel).toHaveBeenCalledTimes(1);
-    expect(result.current.phase).toBe('idle');
+    expect(result.current.phase).toBe('cancelling');
     expect(result.current.error).toBeNull();
+
+    act(() => result.current.cancel());
+    expect(task.cancel).toHaveBeenCalledTimes(1);
+
+    act(() => { void result.current.start(); });
+    expect(deps.createTask).toHaveBeenCalledTimes(1);
 
     download.reject(new Error('native cancellation settled'));
     await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(deps.openInstaller).not.toHaveBeenCalled();
+    expect(deps.markVersionDownloaded).not.toHaveBeenCalled();
+    expect(deps.recordDownload).not.toHaveBeenCalled();
   });
 
-  it('cancels the native task when the detail screen unmounts', async () => {
+  it('cancels while preparing the destination without starting a native task', async () => {
+    const download = deferred<{ uri: string; size: number }>();
+    const destination = deferred<string>();
+    const { deps } = dependencies(download);
+    (deps.prepareDestination as jest.Mock).mockReturnValue(destination.promise);
+    const { result } = renderHook(() => useApkDownload(input, deps));
+
+    act(() => { void result.current.start(); });
+    await waitFor(() => expect(result.current.phase).toBe('downloading'));
+
+    act(() => result.current.cancel());
+    expect(result.current.phase).toBe('cancelling');
+
+    destination.resolve('file:///cache/app.apk');
+
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(deps.createTask).not.toHaveBeenCalled();
+    expect(deps.removeFile).toHaveBeenCalledWith('file:///cache/app.apk');
+  });
+
+  it('does not cancel the native task twice when the detail screen unmounts during cleanup', async () => {
     const download = deferred<{ uri: string; size: number }>();
     const { deps, task } = dependencies(download);
+    task.cancel.mockImplementation(() => undefined);
     const { result, unmount } = renderHook(() => useApkDownload(input, deps));
 
     act(() => { void result.current.start(); });
     await waitFor(() => expect(result.current.phase).toBe('downloading'));
     await waitFor(() => expect(deps.createTask).toHaveBeenCalledTimes(1));
+    act(() => result.current.cancel());
     unmount();
 
     expect(task.cancel).toHaveBeenCalledTimes(1);
+
+    download.reject(new Error('native cancellation settled'));
+    await waitFor(() => expect(deps.removeFile).toHaveBeenCalledWith('file:///cache/app.apk'));
+    expect(deps.openInstaller).not.toHaveBeenCalled();
+    expect(deps.markVersionDownloaded).not.toHaveBeenCalled();
+    expect(deps.recordDownload).not.toHaveBeenCalled();
   });
 
   it('keeps a verified APK ready when installer launch fails so install can be retried', async () => {
