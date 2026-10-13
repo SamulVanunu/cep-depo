@@ -75,6 +75,25 @@ describe('useApkDownload', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('returns to idle immediately while native cancellation is still settling', async () => {
+    const download = deferred<{ uri: string; size: number }>();
+    const { deps, task } = dependencies(download);
+    task.cancel.mockImplementation(() => undefined);
+    const { result } = renderHook(() => useApkDownload(input, deps));
+
+    act(() => { void result.current.start(); });
+    await waitFor(() => expect(result.current.phase).toBe('downloading'));
+
+    act(() => result.current.cancel());
+
+    expect(task.cancel).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe('idle');
+    expect(result.current.error).toBeNull();
+
+    download.reject(new Error('native cancellation settled'));
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+  });
+
   it('cancels the native task when the detail screen unmounts', async () => {
     const download = deferred<{ uri: string; size: number }>();
     const { deps, task } = dependencies(download);

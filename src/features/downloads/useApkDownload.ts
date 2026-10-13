@@ -89,7 +89,10 @@ export function useApkDownload(
   }, [dependencies, input, openInstaller]);
 
   const cancel = useCallback(() => {
-    operationRef.current?.cancel();
+    if (!operationRef.current) return;
+    operationRef.current.cancel();
+    setError(null);
+    setPhase('idle');
   }, []);
 
   const install = useCallback(async () => {
