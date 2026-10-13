@@ -3,13 +3,13 @@
     "name": "Cep Depo",
     "slug": "cep-depo",
     "scheme": "cepdepo",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "icon": "./assets/app-icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "android": {
       "package": "com.cepdepo.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#101216"

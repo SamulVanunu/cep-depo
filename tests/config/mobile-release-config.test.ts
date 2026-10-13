@@ -1,9 +1,9 @@
 const config = require('../../app.json').expo;
 
-describe('mobile 0.3.0 native configuration', () => {
+describe('mobile 0.3.1 native configuration', () => {
   it('uses the next immutable Android release version', () => {
-    expect(config.version).toBe('0.3.0');
-    expect(config.android.versionCode).toBe(3);
+    expect(config.version).toBe('0.3.1');
+    expect(config.android.versionCode).toBe(4);
   });
 
   it('configures a dark native splash instead of the default gray screen', () => {
