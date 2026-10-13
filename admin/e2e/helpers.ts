@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import type { Page } from '@playwright/test';
 
-export const serviceClient = createClient(
+import type { Database } from '../src/types/database.types';
+
+export const serviceClient = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.E2E_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false, autoRefreshToken: false } },
@@ -8,6 +11,15 @@ export const serviceClient = createClient(
 
 export function uniqueValue(prefix: string) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+export function collectBrowserErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', error => errors.push(error.message));
+  return errors;
 }
 
 export async function createTestUser(prefix = 'member') {
@@ -24,7 +36,7 @@ export async function createTestUser(prefix = 'member') {
 }
 
 export async function createTestApp(prefix = 'e2e-app') {
-  const category = await serviceClient.from('categories').select('id').order('position').limit(1).single();
+  const category = await serviceClient.from('categories').select('id').eq('is_default', true).single();
   if (category.error) throw category.error;
   const slug = uniqueValue(prefix);
   const result = await serviceClient.from('apps').insert({
@@ -39,6 +51,7 @@ export async function createTestApp(prefix = 'e2e-app') {
 }
 
 export async function cleanupTestApp(appId: string) {
+  const app = await serviceClient.from('apps').select('icon_path').eq('id', appId).maybeSingle();
   const versions = await serviceClient.from('app_versions').select('id, apk_path').eq('app_id', appId);
   const versionIds = (versions.data ?? []).map(version => version.id);
   if (versionIds.length) {
@@ -52,8 +65,11 @@ export async function cleanupTestApp(appId: string) {
     if (draftPaths.length) await serviceClient.storage.from('apk-drafts').remove(draftPaths);
     const apkPaths = (versions.data ?? []).map(version => version.apk_path);
     if (apkPaths.length) await serviceClient.storage.from('apks').remove(apkPaths);
+    await serviceClient.from('admin_audit_logs').delete().in('target_id', [...versionIds, ...draftPaths, ...apkPaths]);
   }
   await serviceClient.from('apps').delete().eq('id', appId);
+  if (app.data?.icon_path) await serviceClient.storage.from('app-assets').remove([app.data.icon_path]);
+  await serviceClient.from('admin_audit_logs').delete().eq('target_id', appId);
 }
 
 export async function cleanupTestUser(userId: string) {

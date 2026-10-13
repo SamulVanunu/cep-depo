@@ -117,7 +117,11 @@ npm --prefix admin run build
 npm --prefix admin run test:e2e
 ```
 
-E2E komutu yalnız yerel Supabase'e bağlanır, kendi `*-e2e@example.test` kullanıcılarını oluşturup temizler ve veritabanını resetlemez. Tamamlanmamış APK upload'ları uygulama detayındaki yayın ekranından, yalnız tanınan `operations/<uuid>/source.apk` yolları için audit kaydıyla temizlenir. Auth ban ile profil durumu ayrışırsa kullanıcı ekranı `Kısmi` durum gösterir; aynı etkinleştirme/askıya alma işlemi tekrar çalıştırılarak iki taraf uzlaştırılır.
+E2E komutu yalnız yerel Supabase'e bağlanır, kendi `*-e2e@example.test` kullanıcılarını oluşturup temizler ve veritabanını resetlemez. Tamamlanmamış APK upload'ları `Ayarlar` ekranından, yalnız tanınan `operations/<uuid>/source.apk` yolları için audit kaydıyla temizlenir. Auth ban ile profil durumu ayrışırsa kullanıcı ekranı `Kısmi` durum gösterir; aynı etkinleştirme/askıya alma işlemi tekrar çalıştırılarak iki taraf uzlaştırılır.
+
+APK yayınlama `/publish` altında 3 adımda yapılır: uygulamayı seçme veya temel bilgilerle oluşturma, APK’yı hash/upload/Storage doğrulamasından geçirme ve son özeti açıkça `Yayınla` düğmesiyle onaylama. Yeni uygulamalar korumalı `Genel` kategorisine atanır ve ilk sürüm başarıyla yayınlanana kadar arşivde tutulur. Aktif hash/upload iptal edilebilir; doğrulama veya yayın hataları dosyayı yeniden seçmeden düzeltilebilir akış sunar.
+
+Yerel migration, test ve build doğrulaması hosted değişiklik izni vermez. Hosted Supabase migration ve Vercel deployment işlemleri birbirinden ayrı açık operatör onayı gerektirir.
 
 Hosted SMTP şu anda beta kısıtıdır. `AUTH_EMAIL_ENABLED` yalnız kayıt, doğrulama ve recovery teslimatı gerçek alıcıyla doğrulandıktan sonra açılmalıdır.
 

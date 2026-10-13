@@ -11,9 +11,11 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(() => expect(browserErrors).toEqual([]));
 
 test('signed-out visitors are redirected to login', async ({ page }) => {
-  await page.goto('/apps');
-  await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('heading', { name: 'Yönetim paneli' })).toBeVisible();
+  for (const path of ['/apps', '/publish', '/settings']) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Yönetim paneli' })).toBeVisible();
+  }
 });
 
 test('non-admin credentials are denied without retaining a dashboard session', async ({ page }) => {
@@ -35,5 +37,7 @@ test('non-admin credentials are denied without retaining a dashboard session', a
   await page.getByRole('button', { name: 'Giriş yap' }).click();
   await expect(page.locator('#login-error')).toContainText('yetkin bulunmuyor');
   await page.goto('/');
+  await expect(page).toHaveURL(/\/login$/);
+  await page.goto('/settings');
   await expect(page).toHaveURL(/\/login$/);
 });
