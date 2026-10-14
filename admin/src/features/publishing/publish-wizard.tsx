@@ -81,7 +81,7 @@ export function PublishWizard({
     setPublishing(true);
     setPublishError(null);
     try {
-      const result = await publishVersion(state.review.versionId, state.review.app.isNew);
+      const result = await publishVersion(state.review.versionId);
       if (!result.ok) {
         setPublishError(result.error.message);
         return;

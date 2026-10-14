@@ -5,6 +5,7 @@ export type ActionErrorCode =
   | 'VALIDATION'
   | 'CONFLICT'
   | 'NOT_FOUND'
+  | 'FEATURE_DISABLED'
   | 'TEMPORARY'
   | 'INTERNAL';
 
@@ -26,6 +27,7 @@ const publicMessages: Readonly<Record<ActionErrorCode, string>> = {
   VALIDATION: 'Gönderilen bilgiler geçerli değil.',
   CONFLICT: 'Bu bilgilerle çakışan bir kayıt zaten var.',
   NOT_FOUND: 'İstenen kayıt bulunamadı.',
+  FEATURE_DISABLED: 'Harici APK yayınlama henüz etkin değil. Taslak korundu.',
   TEMPORARY: 'İşlem geçici olarak tamamlanamadı. Lütfen yeniden dene.',
   INTERNAL: 'Beklenmeyen bir hata oluştu. Lütfen yeniden dene.',
 };

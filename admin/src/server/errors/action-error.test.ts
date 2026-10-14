@@ -27,6 +27,13 @@ describe('toActionError', () => {
     });
   });
 
+  it('returns the approved default-off external publication message', () => {
+    expect(toActionError(new ActionException('FEATURE_DISABLED'))).toMatchObject({
+      code: 'FEATURE_DISABLED',
+      message: 'Harici APK yayınlama henüz etkin değil. Taslak korundu.',
+    });
+  });
+
   it('sanitizes unknown errors and adds a correlation id', () => {
     const error = toActionError(new Error('SUPABASE_SECRET_KEY=do-not-leak'));
 

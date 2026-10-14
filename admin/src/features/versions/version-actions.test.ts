@@ -10,6 +10,7 @@ function dependencies(overrides: Partial<PublishDependencies> = {}): PublishDepe
   return {
     authorize: vi.fn(async () => ({ userId: actorId })),
     getDraft: vi.fn(async () => ({
+      source: 'storage' as const,
       id: versionId,
       appId,
       draftPath: 'operations/op/source.apk',
@@ -19,6 +20,7 @@ function dependencies(overrides: Partial<PublishDependencies> = {}): PublishDepe
     inspectCanonical: vi.fn(async () => ({ size: 1024 })),
     copyToCanonical: vi.fn(async () => undefined),
     publishRpc: vi.fn(async () => ({ error: null })),
+    externalPublishingEnabled: false,
     ...overrides,
   };
 }
@@ -51,17 +53,62 @@ it('reuses an existing canonical object after RPC failure and publishes only aft
   });
   expect(subject.copyToCanonical).toHaveBeenCalledOnce();
   expect(subject.publishRpc).toHaveBeenCalledTimes(2);
-  expect(subject.publishRpc).toHaveBeenLastCalledWith(actorId, versionId, false);
+  expect(subject.publishRpc).toHaveBeenLastCalledWith(actorId, versionId);
   expect(revalidate).toHaveBeenCalledOnce();
   expect(revalidate).toHaveBeenCalledWith(appId);
 });
 
-it('selects atomic app activation only for a wizard-created app', async () => {
+it('always uses atomic app activation without a caller-controlled switch', async () => {
   const publishRpc = vi.fn(async () => ({ error: null }));
   const subject = dependencies({ publishRpc });
 
-  await expect(publishVersion(versionId, subject, true)).resolves.toMatchObject({ ok: true });
-  expect(publishRpc).toHaveBeenCalledWith(actorId, versionId, true);
+  await expect(publishVersion(versionId, subject)).resolves.toMatchObject({ ok: true });
+  expect(publishRpc).toHaveBeenCalledWith(actorId, versionId);
+});
+
+it('publishes an external draft without touching Storage when rollout is enabled', async () => {
+  const inspectCanonical = vi.fn();
+  const copyToCanonical = vi.fn();
+  const publishRpc = vi.fn(async () => ({ error: null }));
+  const subject = dependencies({
+    getDraft: vi.fn(async () => ({ source: 'external' as const, id: versionId, appId })),
+    inspectCanonical,
+    copyToCanonical,
+    publishRpc,
+    externalPublishingEnabled: true,
+  });
+
+  await expect(publishVersion(versionId, subject)).resolves.toEqual({
+    ok: true,
+    data: { status: 'published' },
+  });
+  expect(inspectCanonical).not.toHaveBeenCalled();
+  expect(copyToCanonical).not.toHaveBeenCalled();
+  expect(publishRpc).toHaveBeenCalledWith(actorId, versionId);
+});
+
+it('preserves an external draft when rollout is disabled', async () => {
+  const inspectCanonical = vi.fn();
+  const copyToCanonical = vi.fn();
+  const publishRpc = vi.fn();
+  const subject = dependencies({
+    getDraft: vi.fn(async () => ({ source: 'external' as const, id: versionId, appId })),
+    inspectCanonical,
+    copyToCanonical,
+    publishRpc,
+    externalPublishingEnabled: false,
+  });
+
+  await expect(publishVersion(versionId, subject)).resolves.toMatchObject({
+    ok: false,
+    error: {
+      code: 'FEATURE_DISABLED',
+      message: 'Harici APK yayınlama henüz etkin değil. Taslak korundu.',
+    },
+  });
+  expect(inspectCanonical).not.toHaveBeenCalled();
+  expect(copyToCanonical).not.toHaveBeenCalled();
+  expect(publishRpc).not.toHaveBeenCalled();
 });
 
 it('rejects an invalid ID before reading or copying storage', async () => {

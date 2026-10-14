@@ -36,7 +36,21 @@ describe('getServerEnv', () => {
       supabaseSecretKey: 'sb_secret_example',
       adminReadOnly: true,
       authEmailEnabled: false,
+      externalApkPublishingEnabled: false,
     });
+  });
+
+  it('enables external APK publication only for the exact true value', () => {
+    const base = {
+      ...validPublicEnv,
+      NEXT_PUBLIC_SITE_URL: 'https://admin.example.com',
+      SUPABASE_SECRET_KEY: 'sb_secret_example',
+    };
+    expect(getServerEnv({ ...base, EXTERNAL_APK_PUBLISHING_ENABLED: 'true' }).externalApkPublishingEnabled).toBe(true);
+    expect(getServerEnv({ ...base, EXTERNAL_APK_PUBLISHING_ENABLED: 'false' }).externalApkPublishingEnabled).toBe(false);
+    expect(() => getServerEnv({ ...base, EXTERNAL_APK_PUBLISHING_ENABLED: 'yes' })).toThrow(
+      'EXTERNAL_APK_PUBLISHING_ENABLED',
+    );
   });
 
   it('rejects a missing secret without echoing supplied values', () => {

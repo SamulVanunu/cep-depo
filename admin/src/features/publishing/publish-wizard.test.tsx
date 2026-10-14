@@ -205,7 +205,7 @@ describe('PublishWizard application step', () => {
     fireEvent.click(publish);
     fireEvent.click(publish);
     expect(publishVersion).toHaveBeenCalledOnce();
-    expect(publishVersion).toHaveBeenCalledWith('a4000000-0000-4000-8000-000000000001', false);
+    expect(publishVersion).toHaveBeenCalledWith('a4000000-0000-4000-8000-000000000001');
     await act(async () => resolveFirst({
       ok: false,
       error: { code: 'TEMPORARY', message: 'İşlem geçici olarak tamamlanamadı. Lütfen yeniden dene.', correlationId: 'safe-id' },
@@ -218,26 +218,13 @@ describe('PublishWizard application step', () => {
     expect(screen.getByRole('link', { name: 'Uygulamalara dön' })).toHaveAttribute('href', '/apps');
   });
 
-  it('activates a wizard-created archived app during publication', async () => {
+  it('publishes an existing archived app without passing an activation switch', async () => {
     const publishVersion = vi.fn(async () => ({ ok: true as const, data: { status: 'published' as const } }));
-    renderWizard({ apkDependencies: successfulApkDependencies(), publishVersion });
-    fireEvent.click(screen.getByRole('button', { name: 'Yeni uygulama oluştur' }));
-    fireEvent.change(screen.getByLabelText('Uygulama adı'), { target: { value: 'Yeni Uygulama' } });
-    fireEvent.change(screen.getByLabelText('Kısa açıklama'), {
-      target: { value: 'Yeni uygulama için yeterli kısa açıklama.' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Uygulamayı oluştur' }));
-    await screen.findByRole('heading', { name: 'APK bilgileri' });
-    fireEvent.change(screen.getByLabelText('APK dosyası'), {
-      target: { files: [new File(['PK'], 'release.apk', { type: 'application/vnd.android.package-archive' })] },
-    });
-    fireEvent.change(screen.getByLabelText('Sürüm adı'), { target: { value: '1.0.0' } });
-    fireEvent.change(screen.getByLabelText('Sürüm kodu'), { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'APK dosyasını doğrula' }));
+    renderWizard({ initialApp: apps[1]!, apkDependencies: successfulApkDependencies(), publishVersion });
+    await reachReview();
     fireEvent.click(await screen.findByRole('button', { name: 'Yayınla' }));
     await waitFor(() => expect(publishVersion).toHaveBeenCalledWith(
       'a4000000-0000-4000-8000-000000000001',
-      true,
     ));
   });
 });

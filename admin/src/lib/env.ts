@@ -13,6 +13,7 @@ export type ServerEnv = PublicEnv &
     supabaseSecretKey: string;
     adminReadOnly: boolean;
     authEmailEnabled: boolean;
+    externalApkPublishingEnabled: boolean;
   }>;
 
 const secureOrLoopbackUrl = z.string().url().refine(value => {
@@ -32,6 +33,7 @@ const serverSchema = publicSchema.extend({
   SUPABASE_SECRET_KEY: z.string().trim().min(1),
   ADMIN_READ_ONLY: z.enum(['true', 'false']).default('true'),
   AUTH_EMAIL_ENABLED: z.enum(['true', 'false']).default('false'),
+  EXTERNAL_APK_PUBLISHING_ENABLED: z.enum(['true', 'false']).default('false'),
 });
 
 function parseEnv<T>(schema: z.ZodType<T>, source: EnvSource): T {
@@ -66,5 +68,6 @@ export function getServerEnv(source: EnvSource = process.env): ServerEnv {
     supabaseSecretKey: env.SUPABASE_SECRET_KEY,
     adminReadOnly: env.ADMIN_READ_ONLY === 'true',
     authEmailEnabled: env.AUTH_EMAIL_ENABLED === 'true',
+    externalApkPublishingEnabled: env.EXTERNAL_APK_PUBLISHING_ENABLED === 'true',
   };
 }

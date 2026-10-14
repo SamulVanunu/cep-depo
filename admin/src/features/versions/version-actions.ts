@@ -6,41 +6,54 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '../../server/errors/action-error';
 import { ActionException, toActionError } from '../../server/errors/action-error';
 import { requireAdmin } from '../../server/auth/require-admin';
+import { getServerEnv } from '../../lib/env';
 
 type Actor = Readonly<{ userId: string }>;
-type Draft = Readonly<{
-  id: string;
-  appId: string;
-  draftPath: string;
-  canonicalPath: string;
-  size: number;
-}>;
+type Draft =
+  | Readonly<{
+      source: 'storage';
+      id: string;
+      appId: string;
+      draftPath: string;
+      canonicalPath: string;
+      size: number;
+    }>
+  | Readonly<{
+      source: 'external';
+      id: string;
+      appId: string;
+    }>;
 
 export type PublishDependencies = Readonly<{
   authorize(): Promise<Actor>;
   getDraft(versionId: string): Promise<Draft | null>;
   inspectCanonical(path: string): Promise<Readonly<{ size: number }> | null>;
   copyToCanonical(draftPath: string, canonicalPath: string): Promise<void>;
-  publishRpc(actorId: string, versionId: string, activateApp: boolean): Promise<{ error: unknown | null }>;
+  publishRpc(actorId: string, versionId: string): Promise<{ error: unknown | null }>;
+  externalPublishingEnabled: boolean;
   revalidate?(appId: string): void;
 }>;
 
 export async function publishVersion(
   versionId: string,
   dependencies: PublishDependencies,
-  activateApp = false,
 ): Promise<ActionResult<Readonly<{ status: 'published' }>>> {
   try {
     const id = z.string().uuid().parse(versionId);
     const actor = await dependencies.authorize();
     const draft = await dependencies.getDraft(id);
     if (!draft) throw new ActionException('NOT_FOUND');
-    const existing = await dependencies.inspectCanonical(draft.canonicalPath);
-    if (existing && existing.size !== draft.size) throw new ActionException('CONFLICT');
-    if (!existing) await dependencies.copyToCanonical(draft.draftPath, draft.canonicalPath);
-    const verified = await dependencies.inspectCanonical(draft.canonicalPath);
-    if (!verified || verified.size !== draft.size) throw new ActionException('TEMPORARY');
-    const published = await dependencies.publishRpc(actor.userId, id, activateApp);
+    if (draft.source === 'external' && !dependencies.externalPublishingEnabled) {
+      throw new ActionException('FEATURE_DISABLED');
+    }
+    if (draft.source === 'storage') {
+      const existing = await dependencies.inspectCanonical(draft.canonicalPath);
+      if (existing && existing.size !== draft.size) throw new ActionException('CONFLICT');
+      if (!existing) await dependencies.copyToCanonical(draft.draftPath, draft.canonicalPath);
+      const verified = await dependencies.inspectCanonical(draft.canonicalPath);
+      if (!verified || verified.size !== draft.size) throw new ActionException('TEMPORARY');
+    }
+    const published = await dependencies.publishRpc(actor.userId, id);
     if (published.error) throw new ActionException('TEMPORARY');
     dependencies.revalidate?.(draft.appId);
     return { ok: true, data: { status: 'published' } };
@@ -67,16 +80,37 @@ function defaultPublishDependencies(): PublishDependencies {
   }
   return {
     authorize,
+    externalPublishingEnabled: getServerEnv().externalApkPublishingEnabled,
     async getDraft(versionId) {
       const db = await database();
-      const [version, audit] = await Promise.all([
-        db.from('app_versions').select('id, app_id, apk_path, apk_size_bytes, status').eq('id', versionId).eq('status', 'draft').maybeSingle(),
-        db.from('admin_audit_logs').select('metadata').eq('target_id', versionId).eq('action', 'version.draft').order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      ]);
-      if (version.error || audit.error) throw version.error ?? audit.error;
+      const version = await db
+        .from('app_versions')
+        .select('id, app_id, download_source, apk_path, apk_size_bytes, status')
+        .eq('id', versionId)
+        .eq('status', 'draft')
+        .maybeSingle();
+      if (version.error) throw version.error;
+      if (!version.data) return null;
+      if (version.data.download_source === 'external') {
+        return {
+          source: 'external',
+          id: version.data.id,
+          appId: version.data.app_id,
+        };
+      }
+      const audit = await db
+        .from('admin_audit_logs')
+        .select('metadata')
+        .eq('target_id', versionId)
+        .eq('action', 'version.draft')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (audit.error) throw audit.error;
       const metadata = audit.data?.metadata;
       const draftPath = metadata && typeof metadata === 'object' && !Array.isArray(metadata) && typeof metadata.path === 'string' ? metadata.path : null;
-      return version.data && draftPath ? {
+      return draftPath && version.data.apk_path ? {
+        source: 'storage',
         id: version.data.id,
         appId: version.data.app_id,
         draftPath,
@@ -96,11 +130,12 @@ function defaultPublishDependencies(): PublishDependencies {
       const result = await db.storage.from('apk-drafts').copy(draftPath, canonicalPath, { destinationBucket: 'apks' });
       if (result.error) throw result.error;
     },
-    async publishRpc(actorId, versionId, activateApp) {
+    async publishRpc(actorId, versionId) {
       const db = await database();
-      return activateApp
-        ? db.rpc('admin_publish_version_and_activate_app', { p_actor_id: actorId, p_version_id: versionId })
-        : db.rpc('admin_publish_version', { p_actor_id: actorId, p_version_id: versionId });
+      return db.rpc('admin_publish_version_and_activate_app', {
+        p_actor_id: actorId,
+        p_version_id: versionId,
+      });
     },
     revalidate(appId) {
       revalidatePath('/');
@@ -111,8 +146,8 @@ function defaultPublishDependencies(): PublishDependencies {
   };
 }
 
-export async function publishVersionAction(versionId: string, activateApp = false) {
-  return publishVersion(versionId, defaultPublishDependencies(), activateApp);
+export async function publishVersionAction(versionId: string) {
+  return publishVersion(versionId, defaultPublishDependencies());
 }
 
 export async function withdrawVersionAction(versionId: string): Promise<ActionResult<Readonly<{ status: 'withdrawn' }>>> {
