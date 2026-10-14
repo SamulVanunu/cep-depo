@@ -1,6 +1,6 @@
 begin;
 
-select plan(24);
+select plan(25);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -277,6 +277,13 @@ select is(
    where action = 'version.publish' and target_id = 'a2300000-0000-4000-8000-000000000003'),
   1,
   'atomic publication writes one version audit row'
+);
+
+select is(
+  (select metadata->>'download_source' from public.admin_audit_logs
+   where action = 'version.publish' and target_id = 'a2300000-0000-4000-8000-000000000003'),
+  'storage',
+  'Storage publication records its explicit download source'
 );
 
 select is(
