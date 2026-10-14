@@ -127,3 +127,69 @@ begin
   );
 end;
 $$;
+
+create or replace function public.admin_record_external_action(
+  p_actor_id uuid,
+  p_action text,
+  p_target_type text,
+  p_target_id text,
+  p_metadata jsonb default '{}'::jsonb
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  audit_id uuid;
+  safe_metadata jsonb;
+  expected_target_type text;
+  external_actions constant text[] = array[
+    'app.create', 'app.update', 'app.archive',
+    'category.create', 'category.update',
+    'asset.upload',
+    'screenshot.create', 'screenshot.update', 'screenshot.delete',
+    'version.draft', 'upload.cleanup',
+    'user.delete', 'user.recovery_request'
+  ];
+begin
+  perform private.require_admin_actor(p_actor_id);
+
+  if not p_action = any (external_actions) then
+    raise exception using errcode = 'P0001', message = 'Geçersiz yönetim işlemi.';
+  end if;
+
+  expected_target_type = case
+    when p_action like 'app.%' then 'app'
+    when p_action like 'category.%' then 'category'
+    when p_action = 'asset.upload' then 'asset'
+    when p_action like 'screenshot.%' then 'screenshot'
+    when p_action = 'version.draft' then 'version'
+    when p_action = 'upload.cleanup' then 'upload'
+    when p_action like 'user.%' then 'user'
+  end;
+
+  if p_target_type is distinct from expected_target_type then
+    raise exception using errcode = 'P0001', message = 'İşlem ve hedef türü eşleşmiyor.';
+  end if;
+
+  if jsonb_typeof(coalesce(p_metadata, '{}'::jsonb)) <> 'object' then
+    raise exception using errcode = 'P0001', message = 'Geçersiz audit metadata.';
+  end if;
+
+  select coalesce(jsonb_object_agg(entry.key, entry.value), '{}'::jsonb)
+  into safe_metadata
+  from jsonb_each(coalesce(p_metadata, '{}'::jsonb)) as entry
+  where entry.key = any (array[
+    'old_status', 'new_status', 'status', 'version_code',
+    'bucket', 'path', 'operation_id', 'partial',
+    'download_source', 'hostname'
+  ]);
+
+  insert into public.admin_audit_logs (actor_id, action, target_type, target_id, metadata)
+  values (p_actor_id, p_action, p_target_type, p_target_id, safe_metadata)
+  returning id into audit_id;
+
+  return audit_id;
+end;
+$$;

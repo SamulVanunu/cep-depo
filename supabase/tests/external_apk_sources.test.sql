@@ -1,6 +1,6 @@
 begin;
 
-select plan(14);
+select plan(15);
 
 select results_eq(
   $$select unnest(enum_range(null::public.apk_download_source))::text$$,
@@ -149,6 +149,34 @@ select throws_ok(
 );
 
 set local role service_role;
+
+do $$
+begin
+  perform public.admin_record_external_action(
+    'b0000000-0000-4000-8000-000000000001',
+    'version.draft',
+    'version',
+    'b3000000-0000-4000-8000-000000000001',
+    jsonb_build_object(
+      'download_source', 'external',
+      'hostname', 'downloads.example.com',
+      'apk_url', 'https://downloads.example.com/releases/app.apk'
+    )
+  );
+end;
+$$;
+
+select results_eq(
+  $$select
+      metadata->>'download_source',
+      metadata->>'hostname',
+      metadata ? 'apk_url'
+    from public.admin_audit_logs
+    where action = 'version.draft'
+      and target_id = 'b3000000-0000-4000-8000-000000000001'$$,
+  $$values ('external'::text, 'downloads.example.com'::text, false)$$,
+  'external draft audit keeps source and hostname but strips the complete URL'
+);
 
 select lives_ok(
   $$select public.admin_publish_version_and_activate_app(

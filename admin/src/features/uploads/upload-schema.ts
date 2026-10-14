@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const APK_MAX_BYTES = 524_288_000;
+export const HOSTED_STORAGE_MAX_BYTES = 50_000_000;
 export const APK_MIME_TYPES = [
   'application/vnd.android.package-archive',
   'application/octet-stream',
