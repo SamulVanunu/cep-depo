@@ -12,3 +12,7 @@ export function createBrowserSupabaseClient() {
   });
   return createBrowserClient<Database>(env.supabaseUrl, env.supabasePublishableKey);
 }
+
+export function getPublicAssetUrl(path: string): string {
+  return createBrowserSupabaseClient().storage.from('app-assets').getPublicUrl(path).data.publicUrl;
+}

@@ -16,7 +16,7 @@ type AppStepProps = Readonly<{
   apps: readonly PublishAppOption[];
   selectedApp: SelectedPublishApp | null;
   createQuickApp(input: Readonly<{ title: string; shortDescription: string }>): Promise<QuickAppResult>;
-  uploadIcon(appId: string, file: File): Promise<void>;
+  uploadIcon(appId: string, file: File): Promise<string>;
   onContinue(app: SelectedPublishApp): void;
 }>;
 
@@ -45,9 +45,11 @@ export function AppStep({ apps, selectedApp, createQuickApp, uploadIcon, onConti
     setPending(true);
     setError(null);
     try {
-      await uploadIcon(iconRetry.app.id, iconRetry.file);
+      const iconPath = await uploadIcon(iconRetry.app.id, iconRetry.file);
+      const updatedApp = { ...iconRetry.app, iconPath };
+      setCurrentApp(updatedApp);
       setIconRetry(null);
-      onContinue(iconRetry.app);
+      onContinue(updatedApp);
     } catch {
       setError('İkon yüklenemedi. Dosyayı kontrol edip yeniden deneyebilirsin.');
     } finally {
@@ -94,7 +96,12 @@ export function AppStep({ apps, selectedApp, createQuickApp, uploadIcon, onConti
 
     if (selectedIcon && selectedIcon.size > 0) {
       try {
-        await uploadIcon(createdApp.id, selectedIcon);
+        const iconPath = await uploadIcon(createdApp.id, selectedIcon);
+        const updatedApp = { ...createdApp, iconPath };
+        setCurrentApp(updatedApp);
+        setPending(false);
+        onContinue(updatedApp);
+        return;
       } catch {
         setIconRetry({ app: createdApp, file: selectedIcon });
         setError('İkon yüklenemedi. Uygulama korundu; ikonu tekrar yükleyebilirsin.');

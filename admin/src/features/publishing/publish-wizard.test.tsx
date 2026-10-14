@@ -7,6 +7,11 @@ import type { PublishAppOption } from '../apps/app-dal';
 import type { ApkStepDependencies } from './apk-step';
 import { PublishWizard } from './publish-wizard';
 
+vi.mock('../../lib/supabase/browser', () => ({
+  createBrowserSupabaseClient: vi.fn(),
+  getPublicAssetUrl: (path: string) => `https://assets.example.com/${path}`,
+}));
+
 const apps: readonly PublishAppOption[] = [
   {
     id: 'a1000000-0000-4000-8000-000000000001',
@@ -42,7 +47,7 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof PublishWiza
       createQuickApp={vi.fn(async () => success)}
       initialApp={null}
       initialSelectionInvalid={false}
-      uploadIcon={vi.fn(async () => undefined)}
+      uploadIcon={vi.fn(async () => 'apps/a/icon.png')}
       publishVersion={vi.fn(async () => ({ ok: true as const, data: { status: 'published' as const } }))}
       {...overrides}
     />,
@@ -161,7 +166,7 @@ describe('PublishWizard application step', () => {
     const createQuickApp = vi.fn(async () => success);
     const uploadIcon = vi.fn()
       .mockRejectedValueOnce(new Error('private storage detail'))
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce('apps/a1000000-0000-4000-8000-000000000003/icons/icon.png');
     renderWizard({ createQuickApp, uploadIcon });
     fireEvent.click(screen.getByRole('button', { name: 'Yeni uygulama oluştur' }));
     fireEvent.change(screen.getByLabelText('Uygulama adı'), { target: { value: 'Yeni Uygulama' } });
@@ -179,6 +184,36 @@ describe('PublishWizard application step', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'APK bilgileri' })).toBeVisible());
     expect(createQuickApp).toHaveBeenCalledOnce();
     expect(uploadIcon).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the returned icon path through retry and renders it in review', async () => {
+    const iconPath = 'apps/a1000000-0000-4000-8000-000000000003/icons/icon.png';
+    const uploadIcon = vi.fn()
+      .mockRejectedValueOnce(new Error('private storage detail'))
+      .mockResolvedValueOnce(iconPath);
+    renderWizard({ createQuickApp: vi.fn(async () => success), uploadIcon, apkDependencies: successfulApkDependencies() });
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni uygulama oluştur' }));
+    fireEvent.change(screen.getByLabelText('Uygulama adı'), { target: { value: 'Yeni Uygulama' } });
+    fireEvent.change(screen.getByLabelText('Kısa açıklama'), {
+      target: { value: 'Yeni uygulama için yeterli kısa açıklama.' },
+    });
+    fireEvent.change(screen.getByLabelText('Uygulama ikonu'), {
+      target: { files: [new File(['icon'], 'icon.png', { type: 'image/png' })] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Uygulamayı oluştur' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'İkonu tekrar yükle' }));
+    await screen.findByRole('heading', { name: 'APK bilgileri' });
+    fireEvent.change(screen.getByLabelText('APK dosyası'), {
+      target: { files: [new File(['PK'], 'release.apk', { type: 'application/vnd.android.package-archive' })] },
+    });
+    fireEvent.change(screen.getByLabelText('Sürüm adı'), { target: { value: '1.0.0' } });
+    fireEvent.change(screen.getByLabelText('Sürüm kodu'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'APK dosyasını doğrula' }));
+    expect(await screen.findByRole('img', { name: 'Yeni Uygulama uygulama ikonu' })).toHaveAttribute(
+      'src',
+      expect.stringContaining(iconPath),
+    );
+    expect(screen.queryByText('asset-save-failed')).not.toBeInTheDocument();
   });
 
   it('moves a verified APK into the focused review step without publishing', async () => {

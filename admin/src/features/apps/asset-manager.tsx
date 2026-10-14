@@ -1,22 +1,31 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
-import { createBrowserSupabaseClient } from '../../lib/supabase/browser';
+import { createBrowserSupabaseClient, getPublicAssetUrl } from '../../lib/supabase/browser';
 import {
   addScreenshotAction,
   requestAssetUploadAction,
   setAppIconAction,
 } from './asset-actions';
 
-export function AssetManager({ appId, screenshotCount }: Readonly<{
+export function AssetManager({ appId, iconPath, screenshotCount }: Readonly<{
   appId: string;
+  iconPath: string | null;
   screenshotCount: number;
 }>) {
+  const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
 
-  async function upload(file: File, kind: 'icon' | 'screenshot', altText = '') {
+  async function upload(
+    file: File,
+    kind: 'icon' | 'screenshot',
+    altText = '',
+    form?: HTMLFormElement,
+  ) {
     setPending(true);
     setMessage(null);
     const intent = await requestAssetUploadAction({
@@ -50,7 +59,14 @@ export function AssetManager({ appId, screenshotCount }: Readonly<{
           altText,
           position: screenshotCount,
         });
-    setMessage(saved.ok ? 'Görsel yüklendi.' : saved.error.message);
+    if (saved.ok) {
+      form?.reset();
+      if (kind === 'screenshot') setScreenshotFile(null);
+      setMessage('Görsel yüklendi.');
+      router.refresh();
+    } else {
+      setMessage(saved.error.message);
+    }
     setPending(false);
   }
 
@@ -62,6 +78,16 @@ export function AssetManager({ appId, screenshotCount }: Readonly<{
           <p className="muted">PNG, JPEG veya WebP; en fazla 10 MiB.</p>
         </div>
       </div>
+      {iconPath ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Supabase project hosts are configured at runtime.
+        <img
+          alt="Mevcut uygulama ikonu"
+          className="asset-icon-preview"
+          height={96}
+          src={getPublicAssetUrl(iconPath)}
+          width={96}
+        />
+      ) : null}
       <div className="asset-grid">
         <label className="field">
           <span>Uygulama ikonu</span>
@@ -79,19 +105,30 @@ export function AssetManager({ appId, screenshotCount }: Readonly<{
           className="field"
           onSubmit={event => {
             event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            const file = form.get('screenshot');
+            const element = event.currentTarget;
+            const form = new FormData(element);
             const altText = String(form.get('altText') ?? '');
-            if (file instanceof File && file.size > 0) void upload(file, 'screenshot', altText);
+            if (screenshotFile && screenshotFile.size > 0) {
+              void upload(screenshotFile, 'screenshot', altText, element);
+            }
           }}
         >
-          <span>Ekran görüntüsü</span>
-          <input accept="image/png,image/jpeg,image/webp" disabled={pending} name="screenshot" required type="file" />
-          <input maxLength={180} minLength={2} name="altText" placeholder="Erişilebilir alt metin" required />
+          <label htmlFor="screenshot-file">Ekran görüntüsü</label>
+          <input
+            accept="image/png,image/jpeg,image/webp"
+            disabled={pending}
+            id="screenshot-file"
+            name="screenshot"
+            onChange={event => setScreenshotFile(event.currentTarget.files?.[0] ?? null)}
+            required
+            type="file"
+          />
+          <label htmlFor="screenshot-alt">Erişilebilir alt metin</label>
+          <input autoComplete="off" id="screenshot-alt" maxLength={180} minLength={2} name="altText" required />
           <button className="secondary-button" disabled={pending} type="submit">Ekran görüntüsü ekle</button>
         </form>
       </div>
-      {message ? <p aria-live="polite" className="muted">{message}</p> : null}
+      {message ? <p aria-live="polite" className="muted" role="status">{message}</p> : null}
     </section>
   );
 }

@@ -35,7 +35,7 @@ export default async function AppDetailPage({
       </header>
 
       <AppForm app={app} categories={categories} />
-      <AssetManager appId={app.id} screenshotCount={app.app_screenshots.length} />
+      <AssetManager appId={app.id} iconPath={app.icon_path} screenshotCount={app.app_screenshots.length} />
       <VersionManager versions={app.app_versions} />
 
       <section aria-labelledby="screenshots-heading" className="panel-section">

@@ -2,6 +2,7 @@
 
 import type { Ref } from 'react';
 
+import { getPublicAssetUrl } from '../../lib/supabase/browser';
 import type { PublishReview } from './publish-types';
 
 function formatBytes(bytes: number): string {
@@ -28,6 +29,16 @@ export function ReviewStep({
         <h2 id="review-step-heading" ref={headingRef} tabIndex={-1}>Kontrol ve yayın</h2>
         <p className="muted">Bilgileri kontrol et. APK yalnız sen Yayınla dediğinde kataloğa çıkar.</p>
       </div>
+      {review.app.iconPath ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Supabase project hosts are configured at runtime.
+        <img
+          alt={`${review.app.title} uygulama ikonu`}
+          className="asset-icon-preview"
+          height={96}
+          src={getPublicAssetUrl(review.app.iconPath)}
+          width={96}
+        />
+      ) : null}
       <dl className="detail-list">
         <div><dt>Uygulama</dt><dd>{review.app.title}</dd></div>
         <div><dt>Sürüm</dt><dd>{review.versionName} (kod {review.versionCode})</dd></div>

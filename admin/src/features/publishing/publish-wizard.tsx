@@ -25,12 +25,12 @@ type PublishWizardProps = Readonly<{
   initialApp: PublishAppOption | null;
   initialSelectionInvalid: boolean;
   createQuickApp?: (input: Readonly<{ title: string; shortDescription: string }>) => Promise<QuickAppResult>;
-  uploadIcon?: (appId: string, file: File) => Promise<void>;
+  uploadIcon?: (appId: string, file: File) => Promise<string>;
   apkDependencies?: ApkStepDependencies;
   publishVersion?: typeof publishVersionAction;
 }>;
 
-async function uploadAppIcon(appId: string, file: File): Promise<void> {
+async function uploadAppIcon(appId: string, file: File): Promise<string> {
   const intent = await requestAssetUploadAction({
     appId,
     kind: 'icon',
@@ -46,6 +46,7 @@ async function uploadAppIcon(appId: string, file: File): Promise<void> {
   if (uploaded.error) throw new Error('asset-upload-failed');
   const saved = await setAppIconAction(appId, intent.data.path);
   if (!saved.ok) throw new Error('asset-save-failed');
+  return intent.data.path;
 }
 
 export function PublishWizard({

@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 
+import { getPublicAssetUrl } from '../../lib/supabase/browser';
 import {
   deleteScreenshotAction,
   updateScreenshotAction,
@@ -18,6 +20,7 @@ export function ScreenshotList({ appId, screenshots }: Readonly<{
   appId: string;
   screenshots: readonly Screenshot[];
 }>) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -40,6 +43,7 @@ export function ScreenshotList({ appId, screenshots }: Readonly<{
                   position: Number(data.get('position')),
                 });
                 setMessage(result.ok ? 'Ekran görüntüsü güncellendi.' : result.error.message);
+                if (result.ok) router.refresh();
               });
             }}
           >
@@ -59,6 +63,7 @@ export function ScreenshotList({ appId, screenshots }: Readonly<{
                 startTransition(async () => {
                   const result = await deleteScreenshotAction(appId, screenshot.id);
                   setMessage(result.ok ? 'Ekran görüntüsü kaydı silindi.' : result.error.message);
+                  if (result.ok) router.refresh();
                 });
               }}
               type="button"
@@ -66,10 +71,19 @@ export function ScreenshotList({ appId, screenshots }: Readonly<{
               Sil
             </button>
           </form>
+          {/* eslint-disable-next-line @next/next/no-img-element -- Supabase project hosts are configured at runtime. */}
+          <img
+            alt={screenshot.alt_text}
+            className="asset-screenshot-preview"
+            height={90}
+            loading="lazy"
+            src={getPublicAssetUrl(screenshot.path)}
+            width={160}
+          />
           <code>{screenshot.path}</code>
         </li>
       ))}
-      {message ? <li aria-live="polite" className="muted">{message}</li> : null}
+      {message ? <li aria-live="polite" className="muted" role="status">{message}</li> : null}
     </ol>
   );
 }
