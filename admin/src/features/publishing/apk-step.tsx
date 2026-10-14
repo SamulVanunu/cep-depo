@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { cleanupOrphanUploadAction } from '../uploads/orphan-cleanup';
+import { createExternalDraftAction } from '../uploads/external-draft-actions';
+import {
+  HOSTED_STORAGE_MAX_BYTES,
+  parseExternalApkUrl,
+  verifyLocalApkMagic,
+} from '../uploads/external-apk';
 import { hashFile } from '../uploads/hash-file';
 import {
   startTusUpload,
@@ -17,6 +23,7 @@ import type { PublishReview, SelectedPublishApp } from './publish-types';
 export type UploadPhase = 'idle' | 'hashing' | 'uploading' | 'finalizing' | 'error' | 'complete';
 
 export type ApkStepDependencies = Readonly<{
+  verifyLocalApkMagic: typeof verifyLocalApkMagic;
   hashFile: typeof hashFile;
   createUploadIntent: typeof createUploadIntentAction;
   startUpload(
@@ -25,24 +32,28 @@ export type ApkStepDependencies = Readonly<{
     callbacks: TusCallbacks,
   ): Promise<TusUploadHandle>;
   finalizeUpload: typeof finalizeUploadAction;
+  createExternalDraft: typeof createExternalDraftAction;
   cleanupOrphan: typeof cleanupOrphanUploadAction;
 }>;
 
 const defaultDependencies: ApkStepDependencies = {
+  verifyLocalApkMagic,
   hashFile,
   createUploadIntent: createUploadIntentAction,
   startUpload: (intent, file, callbacks) => startTusUpload(intent, file, callbacks),
   finalizeUpload: finalizeUploadAction,
+  createExternalDraft: createExternalDraftAction,
   cleanupOrphan: cleanupOrphanUploadAction,
 };
 
 type Progress = Readonly<{ percent: number; processed: number; total: number }>;
+type SourceMode = 'storage' | 'external';
 
 function formatMiB(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
 }
 
-function validateFile(file: File | null): string | null {
+function validateFile(file: File | null, source: SourceMode): string | null {
   if (!file || file.size === 0) return 'Geçerli bir APK dosyası seçmelisin.';
   if (!file.name.toLocaleLowerCase('tr-TR').endsWith('.apk')) return 'Dosya uzantısı .apk olmalıdır.';
   const mimeType = file.type || 'application/octet-stream';
@@ -50,6 +61,9 @@ function validateFile(file: File | null): string | null {
     return 'Seçilen dosyanın APK türü doğrulanamadı.';
   }
   if (file.size > APK_MAX_BYTES) return 'APK dosyası 500 MiB sınırını aşamaz.';
+  if (source === 'storage' && file.size > HOSTED_STORAGE_MAX_BYTES) {
+    return 'Supabase Storage bu planda 50.000.000 bayt üzerindeki APK dosyalarını kabul etmez.';
+  }
   return null;
 }
 
@@ -63,6 +77,7 @@ export function ApkStep({
   dependencies?: ApkStepDependencies;
 }>) {
   const [phase, setPhase] = useState<UploadPhase>('idle');
+  const [source, setSource] = useState<SourceMode>('storage');
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<Progress>({ percent: 0, processed: 0, total: 0 });
   const [message, setMessage] = useState<string | null>(null);
@@ -100,7 +115,7 @@ export function ApkStep({
   async function run(form: HTMLFormElement) {
     if (activeRef.current) return;
     const selectedFile = file;
-    const fileError = validateFile(selectedFile);
+    const fileError = validateFile(selectedFile, source);
     if (fileError) {
       fail(fileError);
       return;
@@ -116,6 +131,16 @@ export function ApkStep({
       return;
     }
 
+    let externalUrl: Readonly<{ url: string; hostname: string }> | null = null;
+    if (source === 'external') {
+      try {
+        externalUrl = parseExternalApkUrl(String(data.get('apkUrl') ?? ''));
+      } catch (error) {
+        fail(error instanceof Error ? error.message : 'Geçerli bir herkese açık HTTPS APK bağlantısı gir.');
+        return;
+      }
+    }
+
     activeRef.current = true;
     cancelledRef.current = false;
     orphanPathRef.current = null;
@@ -126,6 +151,10 @@ export function ApkStep({
 
     try {
       setPhase('hashing');
+      if (source === 'external') {
+        await dependencies.verifyLocalApkMagic(selectedFile);
+        if (cancelledRef.current) return;
+      }
       const digest = await dependencies.hashFile(selectedFile, value => {
         setProgress({
           percent: Math.round(value * 100),
@@ -134,6 +163,37 @@ export function ApkStep({
         });
       }, controller.signal);
       if (cancelledRef.current) return;
+
+      if (source === 'external' && externalUrl) {
+        setPhase('finalizing');
+        const drafted = await dependencies.createExternalDraft({
+          appId: app.id,
+          fileName: selectedFile.name,
+          versionName,
+          versionCode,
+          changelog,
+          apkUrl: externalUrl.url,
+          size: selectedFile.size,
+          sha256: digest,
+        });
+        if (!drafted.ok) {
+          fail(drafted.error.message);
+          return;
+        }
+        setPhase('complete');
+        onComplete({
+          app,
+          versionId: drafted.data.id,
+          versionName,
+          versionCode,
+          fileName: selectedFile.name,
+          size: selectedFile.size,
+          sha256: digest,
+          changelog,
+          source: { kind: 'external', hostname: drafted.data.hostname },
+        });
+        return;
+      }
 
       const mimeType = selectedFile.type || 'application/octet-stream';
       const intent = await dependencies.createUploadIntent({
@@ -195,12 +255,17 @@ export function ApkStep({
         size: selectedFile.size,
         sha256: digest,
         changelog,
+        source: { kind: 'storage' },
       });
     } catch (error) {
       if (!cancelledRef.current) {
-        fail(error instanceof DOMException && error.name === 'AbortError'
-          ? 'İşlem iptal edildi.'
-          : 'APK işlenemedi. Lütfen yeniden dene.');
+        const safeMessage = error instanceof Error && [
+          'Seçilen dosya geçerli bir APK değil.',
+          'Geçerli bir herkese açık HTTPS APK bağlantısı gir.',
+        ].includes(error.message)
+          ? error.message
+          : 'APK işlenemedi. Lütfen yeniden dene.';
+        fail(error instanceof DOMException && error.name === 'AbortError' ? 'İşlem iptal edildi.' : safeMessage);
       }
     } finally {
       activeRef.current = false;
@@ -237,7 +302,10 @@ export function ApkStep({
     ? 'Dosya doğrulanıyor'
     : phase === 'uploading'
       ? 'APK yükleniyor'
-      : 'Sunucuda doğrulanıyor';
+      : source === 'external'
+        ? 'Harici APK taslağı oluşturuluyor'
+        : 'Sunucuda doğrulanıyor';
+  const storageFileTooLarge = source === 'storage' && Boolean(file && file.size > HOSTED_STORAGE_MAX_BYTES);
 
   return (
     <section aria-labelledby="apk-step-heading" className="record-form">
@@ -254,8 +322,54 @@ export function ApkStep({
           void run(event.currentTarget);
         }}
       >
+        <fieldset disabled={active}>
+          <legend>APK kaynağı</legend>
+          <label>
+            <input
+              checked={source === 'storage'}
+              name="apkSource"
+              onChange={() => {
+                setSource('storage');
+                setPhase('idle');
+                setMessage(null);
+              }}
+              type="radio"
+              value="storage"
+            />
+            APK dosyası yükle
+          </label>
+          <label>
+            <input
+              checked={source === 'external'}
+              name="apkSource"
+              onChange={() => {
+                setSource('external');
+                setPhase('idle');
+                setMessage(null);
+              }}
+              type="radio"
+              value="external"
+            />
+            HTTPS APK linki kullan
+          </label>
+        </fieldset>
+        {source === 'external' ? (
+          <label className="field">
+            <span>Doğrudan HTTPS APK bağlantısı</span>
+            <input
+              aria-label="Doğrudan HTTPS APK bağlantısı"
+              aria-describedby={phase === 'error' ? 'apk-step-error' : 'external-apk-help'}
+              autoComplete="url"
+              disabled={active}
+              name="apkUrl"
+              placeholder="https://downloads.example.com/releases/app.apk"
+              type="url"
+            />
+            <small id="external-apk-help">Kimlik bilgisi, sorgu parametresi ve yönlendirme sayfası kullanma.</small>
+          </label>
+        ) : null}
         <label className="field">
-          <span>APK dosyası</span>
+          <span>{source === 'external' ? 'Doğrulanacak yerel APK dosyası' : 'APK dosyası'}</span>
           <input
             accept=".apk,application/vnd.android.package-archive,application/octet-stream"
             aria-describedby={phase === 'error' ? 'apk-step-error' : undefined}
@@ -298,9 +412,27 @@ export function ApkStep({
           </p>
         ) : null}
 
+        {storageFileTooLarge && phase === 'error' ? (
+          <button
+            className="secondary-button"
+            onClick={() => {
+              setSource('external');
+              setPhase('idle');
+              setMessage(null);
+            }}
+            type="button"
+          >
+            HTTPS linki kullan
+          </button>
+        ) : null}
+
         {!active && phase !== 'complete' ? (
           <button className="primary-button" type="submit">
-            {phase === 'error' ? 'Tekrar dene' : 'APK dosyasını doğrula'}
+            {phase === 'error'
+              ? 'Tekrar dene'
+              : source === 'external'
+                ? 'Harici APK bilgilerini doğrula'
+                : 'APK dosyasını doğrula'}
           </button>
         ) : null}
       </form>

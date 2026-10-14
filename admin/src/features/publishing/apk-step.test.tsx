@@ -26,6 +26,7 @@ function actionError(message = 'İşlem geçici olarak tamamlanamadı. Lütfen y
 
 function dependencies(overrides: Partial<ApkStepDependencies> = {}): ApkStepDependencies {
   return {
+    verifyLocalApkMagic: vi.fn(async () => undefined),
     hashFile: vi.fn(async (_file, onProgress) => {
       onProgress?.(0.5);
       onProgress?.(1);
@@ -51,6 +52,14 @@ function dependencies(overrides: Partial<ApkStepDependencies> = {}): ApkStepDepe
       ok: true as const,
       data: { id: 'a4000000-0000-4000-8000-000000000001', status: 'draft' as const },
     })),
+    createExternalDraft: vi.fn(async () => ({
+      ok: true as const,
+      data: {
+        id: 'a4000000-0000-4000-8000-000000000001',
+        status: 'draft' as const,
+        hostname: 'downloads.example.com',
+      },
+    })),
     cleanupOrphan: vi.fn(async () => ({ ok: true as const, data: null })),
     ...overrides,
   };
@@ -58,6 +67,14 @@ function dependencies(overrides: Partial<ApkStepDependencies> = {}): ApkStepDepe
 
 function apkFile(name = 'release.apk', type = 'application/vnd.android.package-archive') {
   return new File([new Uint8Array(2 * 1024 * 1024)], name, { type });
+}
+
+function externalApkFile() {
+  return new File(
+    [new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0xff])],
+    'external-release.apk',
+    { type: 'application/vnd.android.package-archive' },
+  );
 }
 
 function fillForm(file: File) {
@@ -68,6 +85,26 @@ function fillForm(file: File) {
 }
 
 describe('ApkStep', () => {
+  it('offers accessible Storage and external HTTPS source choices', () => {
+    render(<ApkStep app={app} dependencies={dependencies()} onComplete={vi.fn()} />);
+    expect(screen.getByRole('group', { name: 'APK kaynağı' })).toBeVisible();
+    expect(screen.getByRole('radio', { name: 'APK dosyası yükle' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' })).not.toBeChecked();
+  });
+
+  it('redirects a file above the hosted 50,000,000-byte threshold to external mode', async () => {
+    const file = apkFile();
+    Object.defineProperty(file, 'size', { value: 50_000_001 });
+    const createUploadIntent = vi.fn();
+    render(<ApkStep app={app} dependencies={dependencies({ createUploadIntent })} onComplete={vi.fn()} />);
+    fillForm(file);
+    fireEvent.click(screen.getByRole('button', { name: 'APK dosyasını doğrula' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('50.000.000 bayt');
+    expect(createUploadIntent).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'HTTPS linki kullan' }));
+    expect(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' })).toBeChecked();
+  });
+
   it.each([
     { name: 'yanlış uzantı', file: apkFile('release.zip') },
     { name: 'yanlış MIME', file: apkFile('release.apk', 'text/plain') },
@@ -111,6 +148,108 @@ describe('ApkStep', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'İptal' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('İşlem iptal edildi'));
     expect(createUploadIntent).not.toHaveBeenCalled();
+  });
+
+  it('verifies local magic, hashes, and creates an external draft without TUS', async () => {
+    const order: string[] = [];
+    const verifyLocalApkMagic = vi.fn(async () => { order.push('magic'); });
+    const hashFile = vi.fn(async () => {
+      order.push('hash');
+      return sha256;
+    });
+    const createExternalDraft = vi.fn(async () => {
+      order.push('draft');
+      return {
+        ok: true as const,
+        data: {
+          id: 'a4000000-0000-4000-8000-000000000001',
+          status: 'draft' as const,
+          hostname: 'downloads.example.com',
+        },
+      };
+    });
+    const createUploadIntent = vi.fn();
+    const startUpload = vi.fn();
+    const onComplete = vi.fn();
+    render(<ApkStep
+      app={app}
+      dependencies={dependencies({
+        verifyLocalApkMagic,
+        hashFile,
+        createExternalDraft,
+        createUploadIntent,
+        startUpload,
+      })}
+      onComplete={onComplete}
+    />);
+    fireEvent.click(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' }));
+    const file = externalApkFile();
+    fireEvent.change(screen.getByLabelText('Doğrulanacak yerel APK dosyası'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Doğrudan HTTPS APK bağlantısı'), {
+      target: { value: 'https://downloads.example.com/releases/app.apk' },
+    });
+    fireEvent.change(screen.getByLabelText('Sürüm adı'), { target: { value: '1.2.0' } });
+    fireEvent.change(screen.getByLabelText('Sürüm kodu'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Harici APK bilgilerini doğrula' }));
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
+      source: { kind: 'external', hostname: 'downloads.example.com' },
+    })));
+    expect(order).toEqual(['magic', 'hash', 'draft']);
+    expect(createExternalDraft).toHaveBeenCalledWith(expect.objectContaining({
+      appId: app.id,
+      fileName: file.name,
+      apkUrl: 'https://downloads.example.com/releases/app.apk',
+      size: file.size,
+      sha256,
+    }));
+    expect(createUploadIntent).not.toHaveBeenCalled();
+    expect(startUpload).not.toHaveBeenCalled();
+  });
+
+  it('rejects wrong local APK magic before hashing or draft creation', async () => {
+    const hashFile = vi.fn();
+    const createExternalDraft = vi.fn();
+    render(<ApkStep app={app} dependencies={dependencies({
+      verifyLocalApkMagic: vi.fn(async () => { throw new Error('Seçilen dosya geçerli bir APK değil.'); }),
+      hashFile,
+      createExternalDraft,
+    })} onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' }));
+    fireEvent.change(screen.getByLabelText('Doğrulanacak yerel APK dosyası'), {
+      target: { files: [externalApkFile()] },
+    });
+    fireEvent.change(screen.getByLabelText('Doğrudan HTTPS APK bağlantısı'), {
+      target: { value: 'https://downloads.example.com/releases/app.apk' },
+    });
+    fireEvent.change(screen.getByLabelText('Sürüm adı'), { target: { value: '1.2.0' } });
+    fireEvent.change(screen.getByLabelText('Sürüm kodu'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Harici APK bilgilerini doğrula' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('geçerli bir APK değil');
+    expect(hashFile).not.toHaveBeenCalled();
+    expect(createExternalDraft).not.toHaveBeenCalled();
+  });
+
+  it('cancels external hashing without creating a draft and remains retryable', async () => {
+    const hashFile = vi.fn((_file, _onProgress, signal) => new Promise<string>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }));
+    const createExternalDraft = vi.fn();
+    render(<ApkStep app={app} dependencies={dependencies({ hashFile, createExternalDraft })} onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' }));
+    fireEvent.change(screen.getByLabelText('Doğrulanacak yerel APK dosyası'), {
+      target: { files: [externalApkFile()] },
+    });
+    fireEvent.change(screen.getByLabelText('Doğrudan HTTPS APK bağlantısı'), {
+      target: { value: 'https://downloads.example.com/releases/app.apk' },
+    });
+    fireEvent.change(screen.getByLabelText('Sürüm adı'), { target: { value: '1.2.0' } });
+    fireEvent.change(screen.getByLabelText('Sürüm kodu'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Harici APK bilgilerini doğrula' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'İptal' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('İşlem iptal edildi'));
+    expect(screen.getByRole('button', { name: 'Harici APK bilgilerini doğrula' })).toBeEnabled();
+    expect(createExternalDraft).not.toHaveBeenCalled();
   });
 
   it('terminates an active upload and cleans its orphan path', async () => {
@@ -171,6 +310,7 @@ describe('ApkStep', () => {
       size: file.size,
       sha256,
       changelog: 'Daha hızlı ve güvenli.',
+      source: { kind: 'storage' },
     }));
   });
 });
@@ -187,12 +327,16 @@ describe('ReviewStep', () => {
       size: 2 * 1024 * 1024,
       sha256,
       changelog: 'Daha hızlı ve güvenli.',
+      source: { kind: 'external' as const, hostname: 'downloads.example.com' },
     };
     render(<ReviewStep onPublish={onPublish} pending review={review} />);
     expect(screen.getByRole('heading', { name: 'Kontrol ve yayın' })).toBeVisible();
     expect(screen.getByText('Cep Araç')).toBeVisible();
     expect(screen.getByText(/2\.097\.152 bayt/)).toBeVisible();
     expect(screen.getByText('Otomatik kategori: Genel')).toBeVisible();
+    expect(screen.getByText('Harici HTTPS')).toBeVisible();
+    expect(screen.getByText('downloads.example.com')).toBeVisible();
+    expect(screen.queryByText(/\/releases\/app\.apk/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('SHA-256 doğrulamasını göster'));
     expect(screen.getByText(sha256)).toBeVisible();
     const publish = screen.getByRole('button', { name: 'Yayınla' });

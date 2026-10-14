@@ -51,6 +51,7 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof PublishWiza
 
 function successfulApkDependencies(): ApkStepDependencies {
   return {
+    verifyLocalApkMagic: vi.fn(async () => undefined),
     hashFile: vi.fn(async () => 'b'.repeat(64)),
     createUploadIntent: vi.fn(async () => ({
       ok: true as const,
@@ -70,6 +71,14 @@ function successfulApkDependencies(): ApkStepDependencies {
     finalizeUpload: vi.fn(async () => ({
       ok: true as const,
       data: { id: 'a4000000-0000-4000-8000-000000000001', status: 'draft' as const },
+    })),
+    createExternalDraft: vi.fn(async () => ({
+      ok: true as const,
+      data: {
+        id: 'a4000000-0000-4000-8000-000000000001',
+        status: 'draft' as const,
+        hostname: 'downloads.example.com',
+      },
     })),
     cleanupOrphan: vi.fn(async () => ({ ok: true as const, data: null })),
   };

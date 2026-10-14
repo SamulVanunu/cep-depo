@@ -15,6 +15,9 @@ export type PublishReview = Readonly<{
   size: number;
   sha256: string;
   changelog: string;
+  source:
+    | Readonly<{ kind: 'storage' }>
+    | Readonly<{ kind: 'external'; hostname: string }>;
 }>;
 
 export type PublishWizardState = Readonly<{

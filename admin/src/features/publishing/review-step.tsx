@@ -32,6 +32,13 @@ export function ReviewStep({
         <div><dt>Uygulama</dt><dd>{review.app.title}</dd></div>
         <div><dt>Sürüm</dt><dd>{review.versionName} (kod {review.versionCode})</dd></div>
         <div><dt>Dosya</dt><dd>{review.fileName}</dd></div>
+        <div>
+          <dt>APK kaynağı</dt>
+          <dd>{review.source.kind === 'external' ? 'Harici HTTPS' : 'Supabase Storage'}</dd>
+        </div>
+        {review.source.kind === 'external' ? (
+          <div><dt>Kaynak sunucu</dt><dd>{review.source.hostname}</dd></div>
+        ) : null}
         <div><dt>Boyut</dt><dd>{formatBytes(review.size)}</dd></div>
         <div><dt>Değişiklik notları</dt><dd>{review.changelog || 'Değişiklik notu eklenmedi.'}</dd></div>
       </dl>
