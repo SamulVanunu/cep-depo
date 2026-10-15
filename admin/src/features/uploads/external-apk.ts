@@ -4,6 +4,19 @@ export { HOSTED_STORAGE_MAX_BYTES };
 
 const INVALID_EXTERNAL_APK_URL = 'Geçerli bir herkese açık HTTPS APK bağlantısı gir.';
 const INVALID_LOCAL_APK = 'Seçilen dosya geçerli bir APK değil.';
+const NON_PUBLIC_HOST_SUFFIXES = [
+  '.localhost',
+  '.local',
+  '.internal',
+  '.lan',
+  '.home',
+  '.home.arpa',
+  '.corp',
+  '.private',
+  '.test',
+  '.invalid',
+  '.onion',
+] as const;
 
 function invalidUrl(): never {
   throw new Error(INVALID_EXTERNAL_APK_URL);
@@ -72,10 +85,7 @@ function publicHostname(rawHostname: string): string {
   if (
     !hostname.includes('.') ||
     hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal') ||
-    hostname.endsWith('.lan')
+    NON_PUBLIC_HOST_SUFFIXES.some(suffix => hostname.endsWith(suffix))
   ) invalidUrl();
   return hostname;
 }
