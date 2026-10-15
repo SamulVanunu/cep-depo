@@ -155,8 +155,8 @@ test('admin publishes an external APK and activates an archived app without APK 
     await page.goto(`/publish?appId=${encodeURIComponent(app.id)}`);
     await page.getByRole('button', { name: 'APK adımına devam et' }).click();
     await page.getByRole('radio', { name: 'HTTPS APK linki kullan' }).check();
-    await page.getByLabel('Doğrulanacak yerel APK dosyası').setInputFiles('e2e/fixtures/test.apk');
-    await page.getByLabel('Doğrudan HTTPS APK bağlantısı').fill(
+    await page.getByLabel('1. Aynı APK’nın yerel kopyası').setInputFiles('e2e/fixtures/test.apk');
+    await page.getByLabel('2. Doğrudan HTTPS APK bağlantısı').fill(
       'https://downloads.example.com/releases/test.apk',
     );
     await page.getByLabel('Sürüm adı').fill('3.1-e2e');

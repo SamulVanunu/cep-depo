@@ -54,7 +54,11 @@ function formatMiB(bytes: number): string {
 }
 
 function validateFile(file: File | null, source: SourceMode): string | null {
-  if (!file || file.size === 0) return 'Geçerli bir APK dosyası seçmelisin.';
+  if (!file || file.size === 0) {
+    return source === 'external'
+      ? 'Önce bağlantıdaki APK’nın aynı yerel kopyasını seç.'
+      : 'Geçerli bir APK dosyası seçmelisin.';
+  }
   if (!file.name.toLocaleLowerCase('tr-TR').endsWith('.apk')) return 'Dosya uzantısı .apk olmalıdır.';
   const mimeType = file.type || 'application/octet-stream';
   if (!APK_MIME_TYPES.includes(mimeType as (typeof APK_MIME_TYPES)[number])) {
@@ -83,6 +87,8 @@ export function ApkStep({
   const [message, setMessage] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const focusFileOnErrorRef = useRef(false);
   const activeRef = useRef(false);
   const cancelledRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -95,7 +101,13 @@ export function ApkStep({
   }, []);
 
   useEffect(() => {
-    if (phase === 'error') errorRef.current?.focus();
+    if (phase !== 'error') return;
+    if (focusFileOnErrorRef.current) {
+      focusFileOnErrorRef.current = false;
+      fileInputRef.current?.focus();
+      return;
+    }
+    errorRef.current?.focus();
   }, [phase]);
 
   useEffect(() => {
@@ -107,7 +119,8 @@ export function ApkStep({
     return () => window.removeEventListener('beforeunload', warn);
   }, []);
 
-  function fail(errorMessage: string) {
+  function fail(errorMessage: string, focusFile = false) {
+    focusFileOnErrorRef.current = focusFile;
     setPhase('error');
     setMessage(errorMessage);
   }
@@ -117,7 +130,7 @@ export function ApkStep({
     const selectedFile = file;
     const fileError = validateFile(selectedFile, source);
     if (fileError) {
-      fail(fileError);
+      fail(fileError, !selectedFile || selectedFile.size === 0);
       return;
     }
     if (!selectedFile) return;
@@ -354,31 +367,57 @@ export function ApkStep({
           </label>
         </fieldset>
         {source === 'external' ? (
+          <>
+            <div className="muted">
+              <strong>Bu yöntem iki bilgi gerektirir:</strong>{' '}
+              aynı APK’nın yerel kopyası ve public doğrudan indirme bağlantısı.
+            </div>
+            <div className="field">
+              <label htmlFor="external-local-apk">1. Aynı APK’nın yerel kopyası</label>
+              <input
+                accept=".apk,application/vnd.android.package-archive,application/octet-stream"
+                aria-describedby={phase === 'error'
+                  ? 'external-local-apk-help apk-step-error'
+                  : 'external-local-apk-help'}
+                disabled={active}
+                id="external-local-apk"
+                name="apk"
+                onChange={event => setFile(event.currentTarget.files?.[0] ?? null)}
+                ref={fileInputRef}
+                type="file"
+              />
+              <small id="external-local-apk-help">
+                Bu dosya sunucuya yüklenmez; boyut, APK biçimi ve SHA-256 doğrulaması için kullanılır.
+              </small>
+            </div>
+            <div className="field">
+              <label htmlFor="external-apk-url">2. Doğrudan HTTPS APK bağlantısı</label>
+              <input
+                aria-describedby={phase === 'error' ? 'apk-step-error' : 'external-apk-help'}
+                autoComplete="url"
+                disabled={active}
+                id="external-apk-url"
+                name="apkUrl"
+                placeholder="https://downloads.example.com/releases/app.apk"
+                type="url"
+              />
+              <small id="external-apk-help">Kimlik bilgisi, sorgu parametresi ve yönlendirme sayfası kullanma.</small>
+            </div>
+          </>
+        ) : (
           <label className="field">
-            <span>Doğrudan HTTPS APK bağlantısı</span>
+            <span>APK dosyası</span>
             <input
-              aria-label="Doğrudan HTTPS APK bağlantısı"
-              aria-describedby={phase === 'error' ? 'apk-step-error' : 'external-apk-help'}
-              autoComplete="url"
+              accept=".apk,application/vnd.android.package-archive,application/octet-stream"
+              aria-describedby={phase === 'error' ? 'apk-step-error' : undefined}
               disabled={active}
-              name="apkUrl"
-              placeholder="https://downloads.example.com/releases/app.apk"
-              type="url"
+              name="apk"
+              onChange={event => setFile(event.currentTarget.files?.[0] ?? null)}
+              ref={fileInputRef}
+              type="file"
             />
-            <small id="external-apk-help">Kimlik bilgisi, sorgu parametresi ve yönlendirme sayfası kullanma.</small>
           </label>
-        ) : null}
-        <label className="field">
-          <span>{source === 'external' ? 'Doğrulanacak yerel APK dosyası' : 'APK dosyası'}</span>
-          <input
-            accept=".apk,application/vnd.android.package-archive,application/octet-stream"
-            aria-describedby={phase === 'error' ? 'apk-step-error' : undefined}
-            disabled={active}
-            name="apk"
-            onChange={event => setFile(event.currentTarget.files?.[0] ?? null)}
-            type="file"
-          />
-        </label>
+        )}
         <label className="field"><span>Sürüm adı</span><input autoComplete="off" disabled={active} maxLength={40} name="versionName" /></label>
         <label className="field"><span>Sürüm kodu</span><input autoComplete="off" disabled={active} inputMode="numeric" min={1} name="versionCode" type="number" /></label>
         <label className="field"><span>Değişiklik notları</span><textarea autoComplete="off" disabled={active} maxLength={5000} name="changelog" rows={5} /></label>

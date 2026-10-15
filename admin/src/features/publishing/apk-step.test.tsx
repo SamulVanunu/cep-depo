@@ -92,6 +92,22 @@ describe('ApkStep', () => {
     expect(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' })).not.toBeChecked();
   });
 
+  it('explains both external inputs and focuses the missing local APK', async () => {
+    render(<ApkStep app={app} dependencies={dependencies()} onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' }));
+
+    expect(screen.getByText('Bu yöntem iki bilgi gerektirir:')).toBeVisible();
+    expect(screen.getByText(/sunucuya yüklenmez; boyut, APK biçimi ve SHA-256 doğrulaması/i)).toBeVisible();
+    const localApk = screen.getByLabelText('1. Aynı APK’nın yerel kopyası');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Harici APK bilgilerini doğrula' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Önce bağlantıdaki APK’nın aynı yerel kopyasını seç.',
+    );
+    expect(localApk).toHaveFocus();
+  });
+
   it('redirects a file above the hosted 50,000,000-byte threshold to external mode', async () => {
     const file = apkFile();
     Object.defineProperty(file, 'size', { value: 50_000_001 });
@@ -184,8 +200,8 @@ describe('ApkStep', () => {
     />);
     fireEvent.click(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' }));
     const file = externalApkFile();
-    fireEvent.change(screen.getByLabelText('Doğrulanacak yerel APK dosyası'), { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText('Doğrudan HTTPS APK bağlantısı'), {
+    fireEvent.change(screen.getByLabelText('1. Aynı APK’nın yerel kopyası'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('2. Doğrudan HTTPS APK bağlantısı'), {
       target: { value: 'https://downloads.example.com/releases/app.apk' },
     });
     fireEvent.change(screen.getByLabelText('Sürüm adı'), { target: { value: '1.2.0' } });
@@ -216,10 +232,10 @@ describe('ApkStep', () => {
       createExternalDraft,
     })} onComplete={vi.fn()} />);
     fireEvent.click(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' }));
-    fireEvent.change(screen.getByLabelText('Doğrulanacak yerel APK dosyası'), {
+    fireEvent.change(screen.getByLabelText('1. Aynı APK’nın yerel kopyası'), {
       target: { files: [externalApkFile()] },
     });
-    fireEvent.change(screen.getByLabelText('Doğrudan HTTPS APK bağlantısı'), {
+    fireEvent.change(screen.getByLabelText('2. Doğrudan HTTPS APK bağlantısı'), {
       target: { value: 'https://downloads.example.com/releases/app.apk' },
     });
     fireEvent.change(screen.getByLabelText('Sürüm adı'), { target: { value: '1.2.0' } });
@@ -237,10 +253,10 @@ describe('ApkStep', () => {
     const createExternalDraft = vi.fn();
     render(<ApkStep app={app} dependencies={dependencies({ hashFile, createExternalDraft })} onComplete={vi.fn()} />);
     fireEvent.click(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' }));
-    fireEvent.change(screen.getByLabelText('Doğrulanacak yerel APK dosyası'), {
+    fireEvent.change(screen.getByLabelText('1. Aynı APK’nın yerel kopyası'), {
       target: { files: [externalApkFile()] },
     });
-    fireEvent.change(screen.getByLabelText('Doğrudan HTTPS APK bağlantısı'), {
+    fireEvent.change(screen.getByLabelText('2. Doğrudan HTTPS APK bağlantısı'), {
       target: { value: 'https://downloads.example.com/releases/app.apk' },
     });
     fireEvent.change(screen.getByLabelText('Sürüm adı'), { target: { value: '1.2.0' } });
