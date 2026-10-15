@@ -51,7 +51,11 @@ export async function createTestApp(prefix = 'e2e-app') {
 }
 
 export async function cleanupTestApp(appId: string) {
-  const app = await serviceClient.from('apps').select('icon_path').eq('id', appId).maybeSingle();
+  const app = await serviceClient
+    .from('apps')
+    .select('icon_path, app_screenshots(id, path)')
+    .eq('id', appId)
+    .maybeSingle();
   const versions = await serviceClient.from('app_versions').select('id, apk_path').eq('app_id', appId);
   const versionIds = (versions.data ?? []).map(version => version.id);
   if (versionIds.length) {
@@ -63,12 +67,25 @@ export async function cleanupTestApp(appId: string) {
         : [];
     });
     if (draftPaths.length) await serviceClient.storage.from('apk-drafts').remove(draftPaths);
-    const apkPaths = (versions.data ?? []).map(version => version.apk_path);
+    const apkPaths = (versions.data ?? []).flatMap(version =>
+      version.apk_path ? [version.apk_path] : [],
+    );
     if (apkPaths.length) await serviceClient.storage.from('apks').remove(apkPaths);
     await serviceClient.from('admin_audit_logs').delete().in('target_id', [...versionIds, ...draftPaths, ...apkPaths]);
   }
   await serviceClient.from('apps').delete().eq('id', appId);
-  if (app.data?.icon_path) await serviceClient.storage.from('app-assets').remove([app.data.icon_path]);
+  const assetPaths = [
+    ...(app.data?.icon_path ? [app.data.icon_path] : []),
+    ...(app.data?.app_screenshots ?? []).map(screenshot => screenshot.path),
+  ];
+  if (assetPaths.length) await serviceClient.storage.from('app-assets').remove(assetPaths);
+  const screenshotIds = (app.data?.app_screenshots ?? []).map(screenshot => screenshot.id);
+  if (screenshotIds.length || assetPaths.length) {
+    await serviceClient
+      .from('admin_audit_logs')
+      .delete()
+      .in('target_id', [...screenshotIds, ...assetPaths]);
+  }
   await serviceClient.from('admin_audit_logs').delete().eq('target_id', appId);
 }
 

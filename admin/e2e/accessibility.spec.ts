@@ -46,12 +46,12 @@ test('publish wizard announces steps, focuses errors and supports keyboard publi
     await page.getByRole('button', { name: 'APK adımına devam et' }).focus();
     await page.keyboard.press('Enter');
     await expect(steps.locator('[aria-current="step"]')).toContainText('APK');
-    await expect(page.getByLabel('APK dosyası')).toBeVisible();
+    await expect(page.getByLabel('APK dosyası', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Sürüm adı')).toBeVisible();
     await expect(page.getByLabel('Sürüm kodu')).toBeVisible();
 
     const versionCode = 1_800_000 + Math.floor(Math.random() * 100_000);
-    await page.getByLabel('APK dosyası').setInputFiles('e2e/fixtures/test.apk');
+    await page.getByLabel('APK dosyası', { exact: true }).setInputFiles('e2e/fixtures/test.apk');
     await page.getByLabel('Sürüm adı').fill('a11y-e2e');
     await page.getByLabel('Sürüm kodu').fill(String(versionCode));
     await page.getByRole('button', { name: 'APK dosyasını doğrula' }).focus();
@@ -72,7 +72,7 @@ test('narrow publish layout keeps APK controls visible without page overflow', a
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/publish?appId=${encodeURIComponent(app.id)}`);
     await page.getByRole('button', { name: 'APK adımına devam et' }).click();
-    await expect(page.getByLabel('APK dosyası')).toBeVisible();
+    await expect(page.getByLabel('APK dosyası', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'APK dosyasını doğrula' })).toBeVisible();
     const sizes = await page.evaluate(() => ({
       viewport: document.documentElement.clientWidth,
