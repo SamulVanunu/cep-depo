@@ -21,7 +21,7 @@ const app: CatalogCard = {
     name: '1.2',
     code: 12,
     changelog: 'Performans iyileştirmeleri.',
-    apkPath: 'apps/a/versions/b.apk',
+    apkSource: { kind: 'storage', path: 'apps/a/versions/b.apk' },
     apkSizeBytes: 24_000_000,
     sha256: 'b'.repeat(64),
     publishedAt: '2026-09-28T10:00:00Z',

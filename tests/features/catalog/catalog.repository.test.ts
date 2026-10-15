@@ -6,11 +6,13 @@ const cardRow: CatalogCardRow = {
   apk_path:
     'apps/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1/versions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2.apk',
   apk_size_bytes: 24_000_000,
+  apk_url: null,
   app_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
   category_id: '22222222-2222-4222-8222-222222222222',
   category_name: 'Eğlence',
   category_slug: 'eglence',
   download_count: 5,
+  download_source: 'storage',
   featured: true,
   icon_path: null,
   published_at: '2026-09-28T10:00:00Z',
@@ -71,6 +73,9 @@ describe('catalog repository', () => {
     } as never);
 
     await expect(repository.getAppBySlug('missing')).resolves.toBeNull();
+    expect(query.select).toHaveBeenCalledWith(expect.stringContaining(
+      'download_source, apk_path, apk_url',
+    ));
     expect(query.order).toHaveBeenNthCalledWith(1, 'version_code', {
       ascending: false,
       referencedTable: 'versions',

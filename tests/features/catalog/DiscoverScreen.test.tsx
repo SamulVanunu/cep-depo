@@ -38,7 +38,7 @@ function card(title: string, slug: string, category = categories[0]): CatalogCar
       name: '1.2',
       code: 12,
       changelog: '',
-      apkPath: `apps/${slug}/versions/1.apk`,
+      apkSource: { kind: 'storage', path: `apps/${slug}/versions/1.apk` },
       apkSizeBytes: 1,
       sha256: 'a'.repeat(64),
       publishedAt: '2026-10-01T00:00:00Z',

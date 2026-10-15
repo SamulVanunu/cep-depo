@@ -1,6 +1,8 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
+import { ApkDownloadError } from './apk-error';
+
 const APK_MAGIC = [0x50, 0x4b, 0x03, 0x04] as const;
 
 export async function verifyApkChunks(
@@ -9,8 +11,8 @@ export async function verifyApkChunks(
   expectedSize: number,
   expectedSha256: string,
 ): Promise<void> {
-  if (actualSize !== expectedSize) throw new Error('APK boyutu doğrulanamadı.');
-  if (!/^[0-9a-f]{64}$/.test(expectedSha256)) throw new Error('APK özeti doğrulanamadı.');
+  if (actualSize !== expectedSize) throw new ApkDownloadError('size');
+  if (!/^[0-9a-f]{64}$/.test(expectedSha256)) throw new ApkDownloadError('sha256');
 
   const hash = sha256.create();
   const magic: number[] = [];
@@ -23,11 +25,11 @@ export async function verifyApkChunks(
     hash.update(chunk);
   }
 
-  if (bytesRead !== actualSize) throw new Error('APK boyutu doğrulanamadı.');
+  if (bytesRead !== actualSize) throw new ApkDownloadError('size');
   if (!APK_MAGIC.every((byte, index) => magic[index] === byte)) {
-    throw new Error('APK dosya imzası geçersiz.');
+    throw new ApkDownloadError('magic');
   }
   if (bytesToHex(hash.digest()) !== expectedSha256) {
-    throw new Error('APK özeti doğrulanamadı.');
+    throw new ApkDownloadError('sha256');
   }
 }

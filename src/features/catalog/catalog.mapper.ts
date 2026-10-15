@@ -1,5 +1,6 @@
 import type { Database } from '../../types/database.types';
 import type {
+  ApkSource,
   CatalogApp,
   CatalogCard,
   CatalogScreenshot,
@@ -24,7 +25,9 @@ export type CatalogAppRow = {
     version_name: string;
     version_code: number;
     changelog: string;
-    apk_path: string;
+    download_source: 'storage' | 'external';
+    apk_path: string | null;
+    apk_url: string | null;
     apk_size_bytes: number;
     sha256: string;
     published_at: string;
@@ -74,16 +77,26 @@ function mapVersion(row: {
   version_code: number | null;
   changelog: string | null;
   apk_path: string | null;
+  apk_url: string | null;
+  download_source: 'storage' | 'external' | null;
   apk_size_bytes: number | null;
   sha256: string | null;
   published_at: string | null;
 }): CatalogVersion {
+  let apkSource: ApkSource;
+  if (row.download_source === 'storage' && row.apk_path && row.apk_url === null) {
+    apkSource = Object.freeze({ kind: 'storage', path: requiredString(row.apk_path) });
+  } else if (row.download_source === 'external' && row.apk_path === null && row.apk_url) {
+    apkSource = Object.freeze({ kind: 'external', url: requiredString(row.apk_url) });
+  } else {
+    throw new Error(INVALID_CATALOG_DATA);
+  }
   return Object.freeze({
     id: requiredString(row.id),
     name: requiredString(row.version_name),
     code: positiveInteger(row.version_code),
     changelog: row.changelog ?? '',
-    apkPath: requiredString(row.apk_path),
+    apkSource,
     apkSizeBytes: positiveInteger(row.apk_size_bytes),
     sha256: requiredString(row.sha256),
     publishedAt: requiredString(row.published_at),
@@ -102,6 +115,8 @@ export function mapCatalogCard(row: CatalogCardRow): CatalogCard {
     version_code: row.version_code,
     changelog: row.version_changelog,
     apk_path: row.apk_path,
+    apk_url: row.apk_url,
+    download_source: row.download_source,
     apk_size_bytes: row.apk_size_bytes,
     sha256: row.sha256,
     published_at: row.published_at,

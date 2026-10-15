@@ -112,7 +112,7 @@ export function AppDetailScreen({
                 appId: app.id,
                 versionId: app.currentVersion.id,
                 versionCode: app.currentVersion.code,
-                apkPath: app.currentVersion.apkPath,
+                apkSource: app.currentVersion.apkSource,
                 apkSizeBytes: app.currentVersion.apkSizeBytes,
                 sha256: app.currentVersion.sha256,
               }}

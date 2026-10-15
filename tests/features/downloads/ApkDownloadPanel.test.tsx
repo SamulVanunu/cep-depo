@@ -7,7 +7,7 @@ const input = {
   appId: 'app-1',
   versionId: 'version-12',
   versionCode: 12,
-  apkPath: 'apps/app-1/versions/version-12.apk',
+  apkSource: { kind: 'storage' as const, path: 'apps/app-1/versions/version-12.apk' },
   apkSizeBytes: 24,
   sha256: 'a'.repeat(64),
 };
@@ -21,7 +21,7 @@ function deferred<T>() {
 
 function dependencies(): ApkDownloadDependencies {
   return {
-    resolveApkUrl: jest.fn(() => 'https://project.supabase.co/app.apk'),
+    publicStorageUrl: jest.fn(() => 'https://project.supabase.co/app.apk'),
     prepareDestination: jest.fn(async () => 'file:///cache/app.apk'),
     createTask: jest.fn((_url, _destination, onProgress) => {
       onProgress({ bytesWritten: 12, totalBytes: 24 });

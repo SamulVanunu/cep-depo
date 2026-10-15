@@ -4,12 +4,16 @@ export type Category = Readonly<{
   name: string;
 }>;
 
+export type ApkSource =
+  | Readonly<{ kind: 'storage'; path: string }>
+  | Readonly<{ kind: 'external'; url: string }>;
+
 export type CatalogVersion = Readonly<{
   id: string;
   name: string;
   code: number;
   changelog: string;
-  apkPath: string;
+  apkSource: ApkSource;
   apkSizeBytes: number;
   sha256: string;
   publishedAt: string;

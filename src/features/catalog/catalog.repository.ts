@@ -75,7 +75,7 @@ export function createCatalogRepository(client: CatalogClient): CatalogRepositor
             download_count,
             category:categories!apps_category_id_fkey(id, slug, name),
             versions:app_versions(
-              id, version_name, version_code, changelog, apk_path,
+              id, version_name, version_code, changelog, download_source, apk_path, apk_url,
               apk_size_bytes, sha256, published_at
             ),
             screenshots:app_screenshots(id, path, alt_text, position)

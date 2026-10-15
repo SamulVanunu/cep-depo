@@ -19,16 +19,16 @@ describe('verifyApkChunks', () => {
 
   it('rejects size mismatch before hashing', async () => {
     await expect(verifyApkChunks(4, chunks([0x50, 0x4b, 0x03, 0x04]), 5, 'a'.repeat(64)))
-      .rejects.toThrow('APK boyutu doğrulanamadı.');
+      .rejects.toThrow('APK dosya boyutu doğrulanamadı.');
   });
 
   it('rejects files without APK ZIP magic bytes', async () => {
     await expect(verifyApkChunks(4, chunks([0, 1, 2, 3]), 4, 'a'.repeat(64)))
-      .rejects.toThrow('APK dosya imzası geçersiz.');
+      .rejects.toThrow('İndirilen dosya geçerli bir APK değil.');
   });
 
   it('rejects SHA-256 mismatch', async () => {
     await expect(verifyApkChunks(4, chunks([0x50, 0x4b, 0x03, 0x04]), 4, 'a'.repeat(64)))
-      .rejects.toThrow('APK özeti doğrulanamadı.');
+      .rejects.toThrow('APK bütünlük doğrulaması başarısız.');
   });
 });

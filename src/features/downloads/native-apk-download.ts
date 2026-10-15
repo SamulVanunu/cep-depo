@@ -45,7 +45,7 @@ function destinationFile(input: ApkDownloadInput): File {
 }
 
 export const defaultApkDownloadDependencies: ApkDownloadDependencies = {
-  resolveApkUrl: getPublicApkUrl,
+  publicStorageUrl: getPublicApkUrl,
   async prepareDestination(input) {
     const file = destinationFile(input);
     if (file.exists) file.delete();

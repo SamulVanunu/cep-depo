@@ -1,13 +1,19 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
-import type { ApkDownloadDependencies } from '../../../src/features/downloads/apk-download';
+import {
+  ApkDownloadError,
+  type ApkDownloadDependencies,
+} from '../../../src/features/downloads/apk-download';
 import { useApkDownload } from '../../../src/features/downloads/useApkDownload';
 
 const input = {
   appId: 'app-1',
   versionId: 'version-12',
   versionCode: 12,
-  apkPath: 'apps/app-1/versions/version-12.apk',
+  apkSource: {
+    kind: 'external' as const,
+    url: 'https://downloads.example.com/releases/version-12.apk',
+  },
   apkSizeBytes: 24,
   sha256: 'a'.repeat(64),
 };
@@ -26,7 +32,7 @@ function dependencies(download: ReturnType<typeof deferred<{ uri: string; size: 
     release: jest.fn(),
   };
   const deps: ApkDownloadDependencies = {
-    resolveApkUrl: jest.fn(() => 'https://project.supabase.co/app.apk'),
+    publicStorageUrl: jest.fn(() => 'https://project.supabase.co/app.apk'),
     prepareDestination: jest.fn(async () => 'file:///cache/app.apk'),
     createTask: jest.fn((_url, _destination, onProgress) => {
       onProgress({ bytesWritten: 6, totalBytes: 24 });
@@ -180,5 +186,37 @@ describe('useApkDownload', () => {
     second.resolve({ uri: 'file:///cache/app.apk', size: 24 });
     await waitFor(() => expect(result.current.phase).toBe('ready'));
     expect(deps.createTask).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the safe network failure without installer or metric side effects', async () => {
+    const download = deferred<{ uri: string; size: number }>();
+    const { deps } = dependencies(download);
+    const { result } = renderHook(() => useApkDownload(input, deps));
+    act(() => { void result.current.start(); });
+    download.reject(new Error('private transport detail'));
+    await waitFor(() => expect(result.current.phase).toBe('error'));
+    expect(result.current.error).toBe('APK bağlantısına ulaşılamadı.');
+    expect(deps.openInstaller).not.toHaveBeenCalled();
+    expect(deps.markVersionDownloaded).not.toHaveBeenCalled();
+    expect(deps.recordDownload).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['source', 'Güvenli APK adresi oluşturulamadı.'],
+    ['size', 'APK dosya boyutu doğrulanamadı.'],
+    ['magic', 'İndirilen dosya geçerli bir APK değil.'],
+    ['sha256', 'APK bütünlük doğrulaması başarısız.'],
+  ] as const)('shows the safe %s failure without opening the installer', async (reason, message) => {
+    const download = deferred<{ uri: string; size: number }>();
+    const { deps } = dependencies(download);
+    (deps.verifyApk as jest.Mock).mockRejectedValue(new ApkDownloadError(reason));
+    const { result } = renderHook(() => useApkDownload(input, deps));
+    act(() => { void result.current.start(); });
+    download.resolve({ uri: 'file:///cache/app.apk', size: 24 });
+    await waitFor(() => expect(result.current.phase).toBe('error'));
+    expect(result.current.error).toBe(message);
+    expect(deps.openInstaller).not.toHaveBeenCalled();
+    expect(deps.markVersionDownloaded).not.toHaveBeenCalled();
+    expect(deps.recordDownload).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   ApkDownloadCancelledError,
+  ApkDownloadError,
   type ApkDownloadDependencies,
   type ApkDownloadInput,
   type ApkDownloadProgress,
@@ -90,7 +91,9 @@ export function useApkDownload(
         setPhase('idle');
         return;
       }
-      setError('APK indirilemedi veya doğrulanamadı.');
+      setError(downloadError instanceof ApkDownloadError
+        ? downloadError.message
+        : 'APK indirilemedi veya doğrulanamadı.');
       setPhase('error');
     }
   }, [dependencies, input, openInstaller]);

@@ -1,8 +1,14 @@
+import type { ApkSource } from '../catalog/catalog.types';
+import { ApkDownloadError } from './apk-error';
+import { resolveApkSourceUrl } from './apk-source';
+
+export { ApkDownloadError } from './apk-error';
+
 export type ApkDownloadInput = Readonly<{
   appId: string;
   versionId: string;
   versionCode: number;
-  apkPath: string;
+  apkSource: ApkSource;
   apkSizeBytes: number;
   sha256: string;
 }>;
@@ -21,7 +27,7 @@ type NativeDownloadTask = Readonly<{
 }>;
 
 export type ApkDownloadDependencies = Readonly<{
-  resolveApkUrl(path: string): string;
+  publicStorageUrl(path: string): string;
   prepareDestination(input: ApkDownloadInput): Promise<string>;
   createTask(
     url: string,
@@ -41,16 +47,6 @@ export class ApkDownloadCancelledError extends Error {
   constructor() {
     super('APK indirmesi iptal edildi.');
     this.name = 'ApkDownloadCancelledError';
-  }
-}
-
-function requireSecureUrl(value: string): string {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) throw new Error();
-    return url.toString();
-  } catch {
-    throw new Error('Güvenli APK adresi oluşturulamadı.');
   }
 }
 
@@ -74,7 +70,7 @@ export function createApkDownloadOperation(
 
   return {
     async download(): Promise<DownloadedApk> {
-      const url = requireSecureUrl(dependencies.resolveApkUrl(input.apkPath));
+      const url = resolveApkSourceUrl(input.apkSource, dependencies.publicStorageUrl);
       try {
         destination = await dependencies.prepareDestination(input);
         if (cancelled) throw new ApkDownloadCancelledError();
@@ -91,8 +87,15 @@ export function createApkDownloadOperation(
           task.cancel();
           throw new ApkDownloadCancelledError();
         }
-        const file = await task.download();
-        if (cancelled || !file) throw new ApkDownloadCancelledError();
+        let file: DownloadedApk | null;
+        try {
+          file = await task.download();
+        } catch {
+          if (cancelled) throw new ApkDownloadCancelledError();
+          throw new ApkDownloadError('network');
+        }
+        if (cancelled) throw new ApkDownloadCancelledError();
+        if (!file) throw new ApkDownloadError('network');
         await dependencies.verifyApk(file, { size: input.apkSizeBytes, sha256: input.sha256 });
         return file;
       } catch (error) {

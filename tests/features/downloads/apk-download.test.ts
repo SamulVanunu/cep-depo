@@ -8,7 +8,7 @@ const input = {
   appId: 'app-1',
   versionId: 'version-12',
   versionCode: 12,
-  apkPath: 'apps/app-1/versions/version-12.apk',
+  apkSource: { kind: 'storage' as const, path: 'apps/app-1/versions/version-12.apk' },
   apkSizeBytes: 24,
   sha256: 'a'.repeat(64),
 };
@@ -22,7 +22,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
   return {
     task,
     deps: {
-      resolveApkUrl: jest.fn(() => 'https://project.supabase.co/storage/v1/object/public/apks/app.apk'),
+      publicStorageUrl: jest.fn(() => 'https://project.supabase.co/storage/v1/object/public/apks/app.apk'),
       prepareDestination: jest.fn(async () => 'file:///cache/version-12.apk'),
       createTask: jest.fn((
         _url: string,
@@ -65,12 +65,42 @@ describe('createApkDownloadOperation', () => {
   });
 
   it('rejects non-HTTPS URLs before creating a destination', async () => {
-    const { deps } = dependencies({ resolveApkUrl: jest.fn(() => 'http://unsafe.example/app.apk') });
+    const unsafeInput = {
+      ...input,
+      apkSource: { kind: 'external' as const, url: 'http://unsafe.example/app.apk' },
+    };
+    const { deps } = dependencies();
 
-    const operation = createApkDownloadOperation(input, deps, jest.fn());
+    const operation = createApkDownloadOperation(unsafeInput, deps, jest.fn());
 
     await expect(operation.download()).rejects.toThrow('Güvenli APK adresi oluşturulamadı.');
     expect(deps.prepareDestination).not.toHaveBeenCalled();
+    expect(deps.createTask).not.toHaveBeenCalled();
+  });
+
+  it('passes a valid external URL unchanged without invoking the Storage resolver', async () => {
+    const url = 'https://downloads.example.com/releases/app.apk';
+    const { deps } = dependencies();
+    const operation = createApkDownloadOperation(
+      { ...input, apkSource: { kind: 'external', url } },
+      deps,
+      jest.fn(),
+    );
+    await operation.download();
+    expect(deps.createTask).toHaveBeenCalledWith(url, expect.any(String), expect.any(Function));
+    expect(deps.publicStorageUrl).not.toHaveBeenCalled();
+  });
+
+  it('maps a native task failure to a safe network error and removes partial data', async () => {
+    const { deps, task } = dependencies();
+    task.download.mockRejectedValue(new Error('private native transport detail'));
+    const operation = createApkDownloadOperation(input, deps, jest.fn());
+    await expect(operation.download()).rejects.toThrow('APK bağlantısına ulaşılamadı.');
+    expect(deps.removeFile).toHaveBeenCalledWith('file:///cache/version-12.apk');
+    expect(deps.verifyApk).not.toHaveBeenCalled();
+    expect(deps.openInstaller).not.toHaveBeenCalled();
+    expect(deps.markVersionDownloaded).not.toHaveBeenCalled();
+    expect(deps.recordDownload).not.toHaveBeenCalled();
   });
 
   it('cancels the native task and removes the partial file', async () => {
