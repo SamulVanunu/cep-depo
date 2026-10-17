@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Cep Depo APK Yükleyici
+Icon=system-software-install
+Exec=@UPLOADER_PATH@
+Terminal=false
+Categories=Utility;
