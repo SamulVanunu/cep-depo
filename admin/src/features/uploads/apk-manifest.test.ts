@@ -37,6 +37,22 @@ describe('parseApkManifest', () => {
     });
   });
 
+  it('accepts the standard AXML document size in the root header', async () => {
+    const { buildManifestXml } = await import('./fixtures/manifest-apk');
+    const axml = buildManifestXml({
+      packageName: 'com.example.real',
+      versionName: '1.0.0',
+      versionCode: 9,
+    });
+    const file = await createApkFromXmlBytes(axml);
+
+    await expect(parseApkManifest(file)).resolves.toMatchObject({
+      packageName: 'com.example.real',
+      versionName: '1.0.0',
+      versionCode: 9,
+    });
+  });
+
   it('omits optional SDK versions when not declared', async () => {
     const file = await createValidApk({
       packageName: 'com.example.app',
@@ -167,8 +183,7 @@ describe('parseApkManifest', () => {
     const RAW_VALUE_IDX_ABSENT = 0xffffffff;
     const strings = ['manifest', 'package', 'versionName', 'versionCode', 'com.example.app', '1.0.0'];
     const idx = (s: string) => strings.indexOf(s);
-    const axml = concatUint8Arrays([
-      buildDocumentHeader(),
+    const body = [
       buildStringPool(strings),
       buildStartElement(idx('manifest'), [
         { nameIdx: idx('package'), rawValueIdx: idx('com.example.app') },
@@ -176,7 +191,9 @@ describe('parseApkManifest', () => {
         // versionCode as a resource reference (not a structured literal).
         { nameIdx: idx('versionCode'), rawValueIdx: RAW_VALUE_IDX_ABSENT, valueType: 0x1f, valueData: 5 },
       ]),
-    ]);
+    ];
+    const documentSize = 8 + body.reduce((total, chunk) => total + chunk.length, 0);
+    const axml = concatUint8Arrays([buildDocumentHeader(documentSize), ...body]);
     const file = await createApkFromXmlBytes(axml);
     await expect(parseApkManifest(file)).rejects.toThrow(EXPECTED_ERROR);
   });

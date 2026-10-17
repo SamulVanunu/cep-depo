@@ -238,10 +238,11 @@ function parseAxml(data: Uint8Array): AXmlElement[] {
 
   // Document header chunk.
   if (cursor + 8 > data.length) reject();
+  const documentSize = readU32(view, 4);
   if (
     readU16(view, 0) !== RES_XML_TYPE ||
     readU16(view, 2) !== 8 ||
-    readU32(view, 4) !== 8
+    documentSize !== data.length
   ) {
     reject();
   }

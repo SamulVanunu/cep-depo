@@ -98,12 +98,12 @@ export function buildStartElement(
   return buf;
 }
 
-export function buildDocumentHeader(): Uint8Array {
+export function buildDocumentHeader(documentSize: number): Uint8Array {
   const buf = new Uint8Array(8);
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   dv.setUint16(0, RES_XML_TYPE, true);
   dv.setUint16(2, 8, true);
-  dv.setUint32(4, 8, true);
+  dv.setUint32(4, documentSize, true);
   return buf;
 }
 
@@ -150,8 +150,9 @@ export function buildManifestXml(opts: BuildManifestXmlOptions = {}): Uint8Array
   if (opts.minSdkVersion !== undefined) add(minSdkAttrIdx, opts.minSdkVersion);
   if (opts.targetSdkVersion !== undefined) add(targetSdkAttrIdx, opts.targetSdkVersion);
 
-  const chunks: Uint8Array[] = [buildDocumentHeader(), buildStringPool(strings)];
-  chunks.push(buildStartElement(manifestTagIdx, attributes));
+  const body = [buildStringPool(strings), buildStartElement(manifestTagIdx, attributes)];
+  const documentSize = 8 + body.reduce((total, chunk) => total + chunk.length, 0);
+  const chunks: Uint8Array[] = [buildDocumentHeader(documentSize), ...body];
   return concatUint8Arrays(chunks);
 }
 
