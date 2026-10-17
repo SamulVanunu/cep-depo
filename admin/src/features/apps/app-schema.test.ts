@@ -5,6 +5,7 @@ import {
   categoryFormSchema,
   parseAppFormData,
   parseQuickAppInput,
+  publishingAppSchema,
 } from './app-schema';
 
 function validAppData(): FormData {
@@ -29,7 +30,6 @@ describe('catalog schemas', () => {
       shortDescription: 'too short',
       description: 'too short',
       featured: false,
-      status: 'active',
     })).toThrow();
   });
 
@@ -42,6 +42,7 @@ describe('catalog schemas', () => {
     expect(parseAppFormData(data)).not.toHaveProperty('download_count');
     expect(parseAppFormData(data)).not.toHaveProperty('created_at');
     expect(parseAppFormData(data)).not.toHaveProperty('icon_path');
+    expect(parseAppFormData(data)).not.toHaveProperty('status');
   });
 
   it('uses a null category when the full app form leaves category empty', () => {
@@ -70,6 +71,24 @@ describe('catalog schemas', () => {
     expect(() => parseQuickAppInput({ title: 'Geçerli', shortDescription: 'kısa' })).toThrow();
     expect(() => parseQuickAppInput({ title: 'x'.repeat(91), shortDescription: 'Yeterince uzun' })).toThrow();
     expect(() => parseQuickAppInput({ title: 'Geçerli', shortDescription: 'x'.repeat(181) })).toThrow();
+  });
+
+  it('requires complete publishing details and an explicit active-category id', () => {
+    const valid = {
+      categoryId: 'a1000000-0000-4000-8000-000000000001',
+      slug: '  Çağrı Öz  ',
+      title: 'Çağrı Öz',
+      shortDescription: 'Yeni uygulama için yeterli kısa açıklama.',
+      description: 'Yeni uygulama için yeterli ayrıntılı açıklama metni.',
+      featured: true,
+    };
+
+    expect(publishingAppSchema.parse(valid)).toEqual({ ...valid, slug: 'cagri-oz' });
+    expect(() => publishingAppSchema.parse({ ...valid, categoryId: '' })).toThrow();
+    expect(() => publishingAppSchema.parse({ ...valid, title: 'x' })).toThrow();
+    expect(() => publishingAppSchema.parse({ ...valid, shortDescription: 'kısa' })).toThrow();
+    expect(() => publishingAppSchema.parse({ ...valid, description: 'kısa' })).toThrow();
+    expect(() => publishingAppSchema.parse({ ...valid, description: 'x'.repeat(5001) })).toThrow();
   });
 
   it('validates category name, slug, position and active state', () => {

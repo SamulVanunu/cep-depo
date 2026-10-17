@@ -10,7 +10,9 @@ const appId = 'a2000000-0000-4000-8000-000000000001';
 const versionId = 'a3000000-0000-4000-8000-000000000001';
 
 const raw = {
+  source: 'external' as const,
   appId,
+  packageName: 'com.example.release',
   fileName: 'release.apk',
   versionName: '1.2.0',
   versionCode: 12,
@@ -34,6 +36,12 @@ function dependencies(
 }
 
 describe('createExternalDraft', () => {
+  it('accepts the current ApkStep external payload until Task 6 migrates callers', async () => {
+    const result = await createExternalDraft(raw, dependencies());
+
+    expect(result).toMatchObject({ ok: true });
+  });
+
   it('authorizes first and inserts server-owned external metadata', async () => {
     const calls: string[] = [];
     const createDraft = vi.fn(async input => {
@@ -64,6 +72,7 @@ describe('createExternalDraft', () => {
     expect(createDraft).toHaveBeenCalledWith({
       actorId,
       appId,
+      packageName: 'com.example.release',
       versionId,
       versionName: '1.2.0',
       versionCode: 12,

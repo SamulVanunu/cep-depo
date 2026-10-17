@@ -18,12 +18,14 @@ import {
 } from '../uploads/tus-upload';
 import { createUploadIntentAction, finalizeUploadAction } from '../uploads/upload-actions';
 import { APK_MAX_BYTES, APK_MIME_TYPES } from '../uploads/upload-schema';
+import { parseApkManifest, type ParsedApkManifest } from '../uploads/apk-manifest';
 import type { PublishReview, SelectedPublishApp } from './publish-types';
 
 export type UploadPhase = 'idle' | 'hashing' | 'uploading' | 'finalizing' | 'error' | 'complete';
 
 export type ApkStepDependencies = Readonly<{
   verifyLocalApkMagic: typeof verifyLocalApkMagic;
+  parseApkManifest?: typeof parseApkManifest;
   hashFile: typeof hashFile;
   createUploadIntent: typeof createUploadIntentAction;
   startUpload(
@@ -38,6 +40,7 @@ export type ApkStepDependencies = Readonly<{
 
 const defaultDependencies: ApkStepDependencies = {
   verifyLocalApkMagic,
+  parseApkManifest,
   hashFile,
   createUploadIntent: createUploadIntentAction,
   startUpload: (intent, file, callbacks) => startTusUpload(intent, file, callbacks),
@@ -83,6 +86,9 @@ export function ApkStep({
   const [phase, setPhase] = useState<UploadPhase>('idle');
   const [source, setSource] = useState<SourceMode>('storage');
   const [file, setFile] = useState<File | null>(null);
+  const [manifest, setManifest] = useState<ParsedApkManifest | null>(null);
+  const [manifestError, setManifestError] = useState<string | null>(null);
+  const [parsingManifest, setParsingManifest] = useState(false);
   const [progress, setProgress] = useState<Progress>({ percent: 0, processed: 0, total: 0 });
   const [message, setMessage] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -94,6 +100,11 @@ export function ApkStep({
   const abortControllerRef = useRef<AbortController | null>(null);
   const uploadHandleRef = useRef<Promise<TusUploadHandle> | null>(null);
   const settleUploadRef = useRef<(() => void) | null>(null);
+  const resolvedDependencies: ApkStepDependencies & { parseApkManifest: typeof parseApkManifest } = {
+    ...defaultDependencies,
+    ...dependencies,
+    parseApkManifest: (dependencies?.parseApkManifest ?? defaultDependencies.parseApkManifest) as typeof parseApkManifest,
+  };
   const orphanPathRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -125,6 +136,20 @@ export function ApkStep({
     setMessage(errorMessage);
   }
 
+  async function updateManifest(nextFile: File | null) {
+    setManifest(null);
+    setManifestError(null);
+    if (!nextFile) return;
+    setParsingManifest(true);
+    try {
+      setManifest(await resolvedDependencies.parseApkManifest(nextFile));
+    } catch (error) {
+      setManifestError(error instanceof Error ? error.message : 'APK manifesti okunamadı. Lütfen geçerli bir APK dosyası seçin.');
+    } finally {
+      setParsingManifest(false);
+    }
+  }
+
   async function run(form: HTMLFormElement) {
     if (activeRef.current) return;
     const selectedFile = file;
@@ -136,13 +161,7 @@ export function ApkStep({
     if (!selectedFile) return;
 
     const data = new FormData(form);
-    const versionName = String(data.get('versionName') ?? '').trim();
-    const versionCode = Number(data.get('versionCode'));
     const changelog = String(data.get('changelog') ?? '').trim();
-    if (!versionName || versionName.length > 40 || !Number.isInteger(versionCode) || versionCode <= 0) {
-      fail('Sürüm adı ve pozitif tam sayı sürüm kodu girmelisin.');
-      return;
-    }
 
     let externalUrl: Readonly<{ url: string; hostname: string }> | null = null;
     if (source === 'external') {
@@ -152,6 +171,21 @@ export function ApkStep({
         fail(error instanceof Error ? error.message : 'Geçerli bir herkese açık HTTPS APK bağlantısı gir.');
         return;
       }
+    }
+
+    let parsedManifest: ParsedApkManifest | null = manifest;
+    if (!parsedManifest) {
+      try {
+        parsedManifest = await resolvedDependencies.parseApkManifest(selectedFile);
+        setManifest(parsedManifest);
+      } catch (error) {
+        fail(error instanceof Error ? error.message : 'APK manifesti okunamadı. Lütfen geçerli bir APK dosyası seçin.', true);
+        return;
+      }
+    }
+    if (!parsedManifest) {
+      fail('APK manifesti okunamadı. Lütfen geçerli bir APK dosyası seçin.', true);
+      return;
     }
 
     activeRef.current = true;
@@ -165,10 +199,10 @@ export function ApkStep({
     try {
       setPhase('hashing');
       if (source === 'external') {
-        await dependencies.verifyLocalApkMagic(selectedFile);
+        await resolvedDependencies.verifyLocalApkMagic(selectedFile);
         if (cancelledRef.current) return;
       }
-      const digest = await dependencies.hashFile(selectedFile, value => {
+      const digest = await resolvedDependencies.hashFile(selectedFile, value => {
         setProgress({
           percent: Math.round(value * 100),
           processed: Math.round(selectedFile.size * value),
@@ -179,11 +213,13 @@ export function ApkStep({
 
       if (source === 'external' && externalUrl) {
         setPhase('finalizing');
-        const drafted = await dependencies.createExternalDraft({
+        const drafted = await resolvedDependencies.createExternalDraft({
           appId: app.id,
+          source: 'external',
+          packageName: parsedManifest.packageName,
           fileName: selectedFile.name,
-          versionName,
-          versionCode,
+          versionName: parsedManifest.versionName,
+          versionCode: parsedManifest.versionCode,
           changelog,
           apkUrl: externalUrl.url,
           size: selectedFile.size,
@@ -197,8 +233,8 @@ export function ApkStep({
         onComplete({
           app,
           versionId: drafted.data.id,
-          versionName,
-          versionCode,
+          versionName: parsedManifest.versionName,
+          versionCode: parsedManifest.versionCode,
           fileName: selectedFile.name,
           size: selectedFile.size,
           sha256: digest,
@@ -209,7 +245,7 @@ export function ApkStep({
       }
 
       const mimeType = selectedFile.type || 'application/octet-stream';
-      const intent = await dependencies.createUploadIntent({
+      const intent = await resolvedDependencies.createUploadIntent({
         appId: app.id,
         fileName: selectedFile.name,
         mimeType,
@@ -225,7 +261,7 @@ export function ApkStep({
 
       await new Promise<void>((resolve, reject) => {
         settleUploadRef.current = resolve;
-        uploadHandleRef.current = dependencies.startUpload(
+        uploadHandleRef.current = resolvedDependencies.startUpload(
           { ...intent.data, mimeType },
           selectedFile,
           {
@@ -244,12 +280,14 @@ export function ApkStep({
 
       setPhase('finalizing');
       setProgress({ percent: 100, processed: selectedFile.size, total: selectedFile.size });
-      const finalized = await dependencies.finalizeUpload({
+      const finalized = await resolvedDependencies.finalizeUpload({
         appId: app.id,
-        operationId: intent.data.operationId,
-        versionName,
-        versionCode,
+        source: 'storage',
+        packageName: parsedManifest.packageName,
+        versionName: parsedManifest.versionName,
+        versionCode: parsedManifest.versionCode,
         changelog,
+        operationId: intent.data.operationId,
         size: selectedFile.size,
         sha256: digest,
       });
@@ -262,8 +300,8 @@ export function ApkStep({
       onComplete({
         app,
         versionId: finalized.data.id,
-        versionName,
-        versionCode,
+        versionName: parsedManifest.versionName,
+        versionCode: parsedManifest.versionCode,
         fileName: selectedFile.name,
         size: selectedFile.size,
         sha256: digest,
@@ -302,7 +340,7 @@ export function ApkStep({
       }
     }
     const path = orphanPathRef.current;
-    if (path) await dependencies.cleanupOrphan(path).catch(() => undefined);
+    if (path) await resolvedDependencies.cleanupOrphan(path).catch(() => undefined);
     settleUploadRef.current?.();
     settleUploadRef.current = null;
     activeRef.current = false;
@@ -319,6 +357,12 @@ export function ApkStep({
         ? 'Harici APK taslağı oluşturuluyor'
         : 'Sunucuda doğrulanıyor';
   const storageFileTooLarge = source === 'storage' && Boolean(file && file.size > HOSTED_STORAGE_MAX_BYTES);
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const nextFile = event.currentTarget.files?.[0] ?? null;
+    setFile(nextFile);
+    void updateManifest(nextFile);
+  }
 
   return (
     <section aria-labelledby="apk-step-heading" className="record-form">
@@ -343,6 +387,9 @@ export function ApkStep({
               name="apkSource"
               onChange={() => {
                 setSource('storage');
+                setFile(null);
+                setManifest(null);
+                setManifestError(null);
                 setPhase('idle');
                 setMessage(null);
               }}
@@ -357,6 +404,9 @@ export function ApkStep({
               name="apkSource"
               onChange={() => {
                 setSource('external');
+                setFile(null);
+                setManifest(null);
+                setManifestError(null);
                 setPhase('idle');
                 setMessage(null);
               }}
@@ -382,7 +432,7 @@ export function ApkStep({
                 disabled={active}
                 id="external-local-apk"
                 name="apk"
-                onChange={event => setFile(event.currentTarget.files?.[0] ?? null)}
+                onChange={handleFileChange}
                 ref={fileInputRef}
                 type="file"
               />
@@ -412,14 +462,25 @@ export function ApkStep({
               aria-describedby={phase === 'error' ? 'apk-step-error' : undefined}
               disabled={active}
               name="apk"
-              onChange={event => setFile(event.currentTarget.files?.[0] ?? null)}
+              onChange={handleFileChange}
               ref={fileInputRef}
               type="file"
             />
           </label>
         )}
-        <label className="field"><span>Sürüm adı</span><input autoComplete="off" disabled={active} maxLength={40} name="versionName" /></label>
-        <label className="field"><span>Sürüm kodu</span><input autoComplete="off" disabled={active} inputMode="numeric" min={1} name="versionCode" type="number" /></label>
+
+        {parsingManifest ? <p aria-live="polite" role="status">Manifest okunuyor…</p> : null}
+        {manifestError ? <p aria-live="assertive" role="alert">{manifestError}</p> : null}
+        {manifest ? (
+          <section aria-label="APK manifest özeti" className="detail-list">
+            <div><dt>Paket</dt><dd>{manifest.packageName}</dd></div>
+            <div><dt>Sürüm adı</dt><dd>{manifest.versionName}</dd></div>
+            <div><dt>Sürüm kodu</dt><dd>{manifest.versionCode}</dd></div>
+            {manifest.minSdkVersion !== undefined ? <div><dt>Min SDK</dt><dd>{manifest.minSdkVersion}</dd></div> : null}
+            {manifest.targetSdkVersion !== undefined ? <div><dt>Hedef SDK</dt><dd>{manifest.targetSdkVersion}</dd></div> : null}
+          </section>
+        ) : null}
+
         <label className="field"><span>Değişiklik notları</span><textarea autoComplete="off" disabled={active} maxLength={5000} name="changelog" rows={5} /></label>
 
         {active ? (
@@ -456,6 +517,9 @@ export function ApkStep({
             className="secondary-button"
             onClick={() => {
               setSource('external');
+              setFile(null);
+              setManifest(null);
+              setManifestError(null);
               setPhase('idle');
               setMessage(null);
             }}
@@ -469,9 +533,7 @@ export function ApkStep({
           <button className="primary-button" type="submit">
             {phase === 'error'
               ? 'Tekrar dene'
-              : source === 'external'
-                ? 'Harici APK bilgilerini doğrula'
-                : 'APK dosyasını doğrula'}
+              : "APK'yı yükle ve yayınla"}
           </button>
         ) : null}
       </form>

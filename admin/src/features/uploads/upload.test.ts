@@ -12,6 +12,18 @@ const actorId = 'a1000000-0000-4000-8000-000000000001';
 const appId = 'a2000000-0000-4000-8000-000000000001';
 const operationId = 'a3000000-0000-4000-8000-000000000001';
 
+const finalizeInput = {
+  source: 'storage' as const,
+  appId,
+  packageName: 'com.example.release',
+  versionName: '1.0.0',
+  versionCode: 1,
+  changelog: '',
+  operationId,
+  size: 1024,
+  sha256: 'a'.repeat(64),
+};
+
 function dependencies(overrides: Partial<UploadActionDependencies> = {}): UploadActionDependencies {
   return {
     authorize: vi.fn(async () => ({ userId: actorId })),
@@ -27,6 +39,12 @@ function dependencies(overrides: Partial<UploadActionDependencies> = {}): Upload
 }
 
 describe('APK upload contracts', () => {
+  it('accepts the current ApkStep Storage payload until Task 6 migrates callers', async () => {
+    const result = await finalizeUpload(finalizeInput, dependencies());
+
+    expect(result).toMatchObject({ ok: true });
+  });
+
   it('recognizes only server-generated orphan draft paths', () => {
     expect(operationPath.test('operations/a3000000-0000-4000-8000-000000000001/source.apk')).toBe(true);
     expect(operationPath.test('../operations/a3000000-0000-4000-8000-000000000001/source.apk')).toBe(false);
@@ -106,15 +124,7 @@ describe('APK upload contracts', () => {
   ])('rejects $name during finalize', async ({ inspect, magic }) => {
     const createDraft = vi.fn();
     const result = await finalizeUpload(
-      {
-        appId,
-        operationId,
-        versionName: '1.0.0',
-        versionCode: 1,
-        changelog: '',
-        size: 1024,
-        sha256: 'a'.repeat(64),
-      },
+      finalizeInput,
       dependencies({
         inspectObject: vi.fn(async () => inspect),
         readMagic: vi.fn(async () => new Uint8Array(magic)),

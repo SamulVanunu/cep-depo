@@ -30,8 +30,18 @@ export const appFormSchema = z.object({
   shortDescription: z.string().trim().min(10).max(180),
   description: z.string().trim().min(10).max(5000),
   featured: z.boolean(),
-  status: z.enum(['active', 'archived']),
 });
+
+export const publishingAppSchema = z.object({
+  categoryId: z.string().uuid(),
+  slug: slugSchema,
+  title: z.string().trim().min(2).max(90),
+  shortDescription: z.string().trim().min(10).max(180),
+  description: z.string().trim().min(10).max(5000),
+  featured: z.boolean(),
+});
+
+export type PublishingAppInput = z.input<typeof publishingAppSchema>;
 
 export const quickAppSchema = z.object({
   title: z.string().trim().min(2).max(90),
@@ -67,12 +77,15 @@ export function parseAppFormData(formData: FormData) {
     shortDescription: formData.get('shortDescription'),
     description: formData.get('description'),
     featured: checkbox(formData.get('featured')),
-    status: formData.get('status'),
   });
 }
 
 export function parseQuickAppInput(raw: unknown) {
   return quickAppSchema.parse(raw);
+}
+
+export function parsePublishingAppInput(raw: unknown) {
+  return publishingAppSchema.parse(raw);
 }
 
 export function parseCategoryFormData(formData: FormData) {

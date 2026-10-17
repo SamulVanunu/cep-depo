@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Page } from '@playwright/test';
 
 import type { Database } from '../src/types/database.types';
+import { onePixelPng } from './fixtures/manifest-apk';
 
 export const serviceClient = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,6 +49,49 @@ export async function createTestApp(prefix = 'e2e-app') {
   }).select('id, slug, title').single();
   if (result.error) throw result.error;
   return result.data;
+}
+
+export async function addTestAppIcon(appId: string) {
+  const path = `apps/${appId}/icons/${crypto.randomUUID()}.png`;
+  const uploaded = await serviceClient.storage.from('app-assets').upload(path, onePixelPng.buffer, {
+    contentType: onePixelPng.mimeType,
+  });
+  if (uploaded.error) throw uploaded.error;
+  const updated = await serviceClient.from('apps').update({ icon_path: path }).eq('id', appId);
+  if (updated.error) throw updated.error;
+  return path;
+}
+
+export async function createPublishedTestApp({
+  prefix = 'e2e-published',
+  packageName,
+  versionCode,
+}: Readonly<{
+  prefix?: string;
+  packageName: string;
+  versionCode: number;
+}>) {
+  const app = await createTestApp(prefix);
+  await addTestAppIcon(app.id);
+  const appUpdate = await serviceClient
+    .from('apps')
+    .update({ package_name: packageName, status: 'active' })
+    .eq('id', app.id);
+  if (appUpdate.error) throw appUpdate.error;
+  const version = await serviceClient.from('app_versions').insert({
+    app_id: app.id,
+    package_name: packageName,
+    version_name: `e2e-${versionCode}`,
+    version_code: versionCode,
+    download_source: 'external',
+    apk_url: `https://downloads.example.com/releases/${app.slug}-${versionCode}.apk`,
+    apk_size_bytes: 1024,
+    sha256: 'a'.repeat(64),
+    status: 'published',
+    published_at: new Date().toISOString(),
+  }).select('id').single();
+  if (version.error) throw version.error;
+  return { ...app, packageName, versionId: version.data.id, versionCode };
 }
 
 export async function cleanupTestApp(appId: string) {

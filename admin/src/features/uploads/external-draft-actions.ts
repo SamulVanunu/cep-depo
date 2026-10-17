@@ -7,26 +7,18 @@ import { requireAdmin } from '../../server/auth/require-admin';
 import type { ActionResult } from '../../server/errors/action-error';
 import { ActionException, toActionError } from '../../server/errors/action-error';
 import { parseExternalApkUrl } from './external-apk';
-import { APK_MAX_BYTES } from './upload-schema';
+import { externalDraftInputSchema } from './upload-schema';
 
 type Actor = Readonly<{ userId: string }>;
 type MutationError = Readonly<{ code?: string; status?: number }> | null;
 
-const externalDraftSchema = z.object({
-  appId: z.string().uuid(),
-  fileName: z.string().trim().toLowerCase().refine(name => name.endsWith('.apk')),
-  versionName: z.string().trim().min(1).max(40),
-  versionCode: z.number().int().positive(),
-  changelog: z.string().trim().max(5000),
-  apkUrl: z.string().trim().min(1).max(2048),
-  size: z.number().int().positive().max(APK_MAX_BYTES),
-  sha256: z.string().regex(/^[0-9a-f]{64}$/),
-});
+const externalDraftSchema = externalDraftInputSchema;
 
 type ExternalDraftInsert = Readonly<{
   actorId: string;
   appId: string;
   versionId: string;
+  packageName: string;
   versionName: string;
   versionCode: number;
   changelog: string;
@@ -57,6 +49,7 @@ export type ExternalDraftActionDependencies = Readonly<{
     error: MutationError;
   }>;
   recordAudit(input: AuditInput): Promise<{ error: MutationError }>;
+  externalPublishingEnabled?: boolean;
 }>;
 
 function defaultDependencies(): ExternalDraftActionDependencies {
@@ -89,6 +82,7 @@ function defaultDependencies(): ExternalDraftActionDependencies {
       return db.from('app_versions').insert({
         id: input.versionId,
         app_id: input.appId,
+        package_name: input.packageName,
         version_name: input.versionName,
         version_code: input.versionCode,
         changelog: input.changelog,
@@ -120,13 +114,20 @@ export async function createExternalDraft(
 ): Promise<ActionResult<Readonly<{ id: string; status: 'draft'; hostname: string }>>> {
   try {
     const actor = await dependencies.authorize();
-    const input = externalDraftSchema.parse(raw);
+    if (dependencies.externalPublishingEnabled === false) {
+      throw new ActionException('FEATURE_DISABLED');
+    }
+    const rawWithSource = (raw && typeof raw === 'object' && !Array.isArray(raw) && !(raw as Record<string, unknown>).source)
+      ? { ...(raw as Record<string, unknown>), source: 'external' }
+      : raw;
+    const input = externalDraftSchema.parse(rawWithSource);
     const parsedUrl = parseExternalApkUrl(input.apkUrl);
     if (!(await dependencies.appExists(input.appId))) throw new ActionException('NOT_FOUND');
     const versionId = dependencies.createId();
     const created = await dependencies.createDraft({
       actorId: actor.userId,
       appId: input.appId,
+      packageName: input.packageName,
       versionId,
       versionName: input.versionName,
       versionCode: input.versionCode,

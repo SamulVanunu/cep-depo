@@ -1,99 +1,181 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { createBrowserSupabaseClient } from '../../lib/supabase/browser';
 import type { ActionResult } from '../../server/errors/action-error';
-import { createQuickAppAction } from '../apps/app-actions';
-import { requestAssetUploadAction, setAppIconAction } from '../apps/asset-actions';
+import {
+  createPublishingAppAction,
+  deleteAppPermanentlyAction,
+  type PublishingAppData,
+} from '../apps/app-actions';
+import type { PublishingAppInput } from '../apps/app-schema';
+import {
+  addScreenshotAction,
+  cleanupPublishingAssetAction,
+  requestAssetUploadAction,
+  setAppIconAction,
+} from '../apps/asset-actions';
+import type { CategoryOption } from '../apps/app-dal';
 import type { PublishAppOption } from '../apps/publish-app-options';
-import { publishVersionAction } from '../versions/version-actions';
+import {
+  publishVersionReplacingPreviousAction,
+} from '../versions/version-actions';
 import { ApkStep, type ApkStepDependencies } from './apk-step';
 import { AppStep } from './app-step';
-import { ReviewStep } from './review-step';
-import type { PublishWizardState, SelectedPublishApp } from './publish-types';
-
-type QuickAppResult = ActionResult<Readonly<{
-  id: string;
-  slug: string;
-  status: 'archived';
-}>>;
+import type { PublishReview, PublishWizardState, SelectedPublishApp } from './publish-types';
 
 type PublishWizardProps = Readonly<{
-  apps: readonly PublishAppOption[];
+  categories: readonly Pick<CategoryOption, 'id' | 'name'>[];
   initialApp: PublishAppOption | null;
   initialSelectionInvalid: boolean;
-  createQuickApp?: (input: Readonly<{ title: string; shortDescription: string }>) => Promise<QuickAppResult>;
-  uploadIcon?: (appId: string, file: File) => Promise<string>;
+  createPublishingApp?: (input: PublishingAppInput) => Promise<ActionResult<PublishingAppData>>;
+  uploadAsset?: (input: Readonly<{
+    appId: string;
+    operationId: string;
+    kind: 'icon' | 'screenshot';
+    file: File;
+    altText: string;
+    position: number;
+  }>) => Promise<string>;
+  compensateNewApp?: (input: Readonly<{ id: string; title: string; operationId: string }>) => Promise<void>;
   apkDependencies?: ApkStepDependencies;
-  publishVersion?: typeof publishVersionAction;
+  publishVersionReplacingPrevious?:
+    typeof publishVersionReplacingPreviousAction;
 }>;
 
-async function uploadAppIcon(appId: string, file: File): Promise<string> {
+async function uploadPublishingAsset(input: Readonly<{
+  appId: string;
+  operationId: string;
+  kind: 'icon' | 'screenshot';
+  file: File;
+  altText: string;
+  position: number;
+}>): Promise<string> {
   const intent = await requestAssetUploadAction({
-    appId,
-    kind: 'icon',
-    fileName: file.name,
-    mimeType: file.type,
-    size: file.size,
+    appId: input.appId,
+    kind: input.kind,
+    fileName: input.file.name,
+    mimeType: input.file.type,
+    size: input.file.size,
   });
   if (!intent.ok) throw new Error('asset-intent-failed');
   const client = createBrowserSupabaseClient();
   const uploaded = await client.storage
     .from(intent.data.bucket)
-    .uploadToSignedUrl(intent.data.path, intent.data.token, file, { contentType: file.type });
-  if (uploaded.error) throw new Error('asset-upload-failed');
-  const saved = await setAppIconAction(appId, intent.data.path);
-  if (!saved.ok) throw new Error('asset-save-failed');
+    .uploadToSignedUrl(intent.data.path, intent.data.token, input.file, { contentType: input.file.type });
+  if (uploaded.error) {
+    await cleanupPublishingAssetAction({
+      appId: input.appId,
+      operationId: input.operationId,
+      path: intent.data.path,
+      kind: input.kind,
+    });
+    throw new Error('asset-upload-failed');
+  }
+  const saved = input.kind === 'icon'
+    ? await setAppIconAction(input.appId, intent.data.path)
+    : await addScreenshotAction({
+        appId: input.appId,
+        path: intent.data.path,
+        altText: input.altText,
+        position: input.position,
+      });
+  if (!saved.ok) {
+    await cleanupPublishingAssetAction({
+      appId: input.appId,
+      operationId: input.operationId,
+      path: intent.data.path,
+      kind: input.kind,
+    });
+    throw new Error('asset-save-failed');
+  }
   return intent.data.path;
 }
 
+async function compensatePublishingApp(input: Readonly<{ id: string; title: string; operationId: string }>) {
+  void input.operationId;
+  const result = await deleteAppPermanentlyAction(input.id, input.title);
+  if (!result.ok) throw new Error('app-compensation-failed');
+}
+
 export function PublishWizard({
-  apps,
+  categories,
   initialApp,
   initialSelectionInvalid,
-  createQuickApp = createQuickAppAction,
-  uploadIcon = uploadAppIcon,
+  createPublishingApp = createPublishingAppAction,
+  uploadAsset = uploadPublishingAsset,
+  compensateNewApp = compensatePublishingApp,
   apkDependencies,
-  publishVersion = publishVersionAction,
+  publishVersionReplacingPrevious = publishVersionReplacingPreviousAction,
 }: PublishWizardProps) {
   const [state, setState] = useState<PublishWizardState>({
     step: 'app',
-    app: initialApp ? { ...initialApp, isNew: false } : null,
+    app: initialApp ? {
+      ...initialApp,
+      isNew: false,
+      operationId: null,
+      initialAssets: null,
+    } : null,
     review: null,
+    cleanupPending: false,
   });
-  const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const publishingRef = useRef(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (state.step === 'review') reviewHeadingRef.current?.focus();
-  }, [state.step]);
+  const [cleanupPending, setCleanupPending] = useState(false);
 
   function continueWithApp(app: SelectedPublishApp) {
     setState(current => ({ ...current, step: 'apk', app }));
   }
 
-  async function publish() {
-    if (!state.review || publishingRef.current) return;
+  async function publish(review: PublishReview, app: SelectedPublishApp) {
+    if (publishingRef.current) return;
     publishingRef.current = true;
     setPublishing(true);
     setPublishError(null);
+    setCleanupPending(false);
     try {
-      const result = await publishVersion(state.review.versionId);
+      const publishFn = publishVersionReplacingPrevious ?? publishVersionReplacingPreviousAction;
+      const result = await publishFn(review.versionId);
       if (!result.ok) {
         setPublishError(result.error.message);
+        if (app.isNew) {
+          try {
+            await compensateNewApp({ id: app.id, title: app.title, operationId: app.operationId ?? '' });
+          } catch {
+            // Compensation owns safe error reporting.
+          }
+          setState({ step: 'app', app: null, review: null, cleanupPending: false });
+        } else {
+          setState(current => ({ ...current, step: 'apk', review: null }));
+        }
         return;
       }
-      setState(current => ({ ...current, step: 'complete' }));
+      setCleanupPending(Boolean(result.data?.cleanupPending));
+      setState(current => ({ ...current, step: 'complete', app: current.app ?? app, review, cleanupPending: Boolean(result.data?.cleanupPending) }));
     } catch {
       setPublishError('Yayınlama tamamlanamadı. Lütfen yeniden dene.');
+      if (app.isNew) {
+        try {
+          await compensateNewApp({ id: app.id, title: app.title, operationId: app.operationId ?? '' });
+        } catch {
+          // Compensation owns safe error reporting.
+        }
+        setState({ step: 'app', app: null, review: null, cleanupPending: false });
+      } else {
+        setState(current => ({ ...current, step: 'apk', review: null }));
+      }
     } finally {
       publishingRef.current = false;
       setPublishing(false);
     }
+  }
+
+  function handleApkComplete(review: PublishReview) {
+    setState(current => ({ ...current, review }));
+    void publish(review, state.app!);
   }
 
   return (
@@ -102,7 +184,6 @@ export function PublishWizard({
         {[
           ['app', 'Uygulama'],
           ['apk', 'APK'],
-          ['review', 'Kontrol ve yayın'],
         ].map(([step, label], index) => (
           <li aria-current={state.step === step ? 'step' : undefined} key={step}>{index + 1}. {label}</li>
         ))}
@@ -114,11 +195,12 @@ export function PublishWizard({
 
       {state.step === 'app' ? (
         <AppStep
-          apps={apps}
-          createQuickApp={createQuickApp}
+          categories={categories}
+          compensateNewApp={compensateNewApp}
+          createPublishingApp={createPublishingApp}
           onContinue={continueWithApp}
           selectedApp={state.app}
-          uploadIcon={uploadIcon}
+          uploadAsset={uploadAsset}
         />
       ) : null}
 
@@ -126,18 +208,16 @@ export function PublishWizard({
         <ApkStep
           app={state.app!}
           dependencies={apkDependencies}
-          onComplete={review => setState(current => ({ ...current, step: 'review', review }))}
+          onComplete={handleApkComplete}
         />
       ) : null}
 
-      {state.step === 'review' && state.review ? (
-        <ReviewStep
-          error={publishError}
-          headingRef={reviewHeadingRef}
-          onPublish={() => void publish()}
-          pending={publishing}
-          review={state.review}
-        />
+      {publishing ? (
+        <p aria-live="polite" role="status">Yayınlama yapılıyor…</p>
+      ) : null}
+
+      {publishError ? (
+        <p aria-live="assertive" role="alert">{publishError}</p>
       ) : null}
 
       {state.step === 'complete' && state.app ? (
@@ -147,6 +227,9 @@ export function PublishWizard({
             <h2 id="publish-complete-heading" tabIndex={-1}>Yayın tamamlandı</h2>
             <p className="muted">{state.app.title} kataloğa başarıyla yayınlandı.</p>
           </div>
+          {cleanupPending ? (
+            <p role="status">Yayın tamamlandı; bazı dosyalar temizleme bekliyor.</p>
+          ) : null}
           <div className="button-row">
             <Link className="primary-button" href={`/apps/${state.app.id}`}>Uygulamayı yönet</Link>
             <Link className="secondary-button" href="/apps">Uygulamalara dön</Link>

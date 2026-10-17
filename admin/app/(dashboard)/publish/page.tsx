@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { listPublishApps } from '../../../src/features/apps/app-dal';
+import { listCategories, listPublishApps } from '../../../src/features/apps/app-dal';
 import { resolvePreselectedApp } from '../../../src/features/publishing/publish-selection';
 import { PublishWizard } from '../../../src/features/publishing/publish-wizard';
 
@@ -11,7 +11,7 @@ export default async function PublishPage({
 }: Readonly<{
   searchParams: Promise<{ appId?: string | string[] }>;
 }>) {
-  const [apps, query] = await Promise.all([listPublishApps(), searchParams]);
+  const [apps, categories, query] = await Promise.all([listPublishApps(), listCategories(), searchParams]);
   const rawAppId = typeof query.appId === 'string' ? query.appId : query.appId === undefined ? undefined : '';
   const selection = resolvePreselectedApp(rawAppId, apps);
 
@@ -25,7 +25,7 @@ export default async function PublishPage({
         </div>
       </header>
       <PublishWizard
-        apps={apps}
+        categories={categories.filter(category => category.isActive)}
         initialApp={selection.app}
         initialSelectionInvalid={selection.invalid}
       />

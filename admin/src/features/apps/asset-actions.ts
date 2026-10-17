@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
 import { requireAdmin } from '../../server/auth/require-admin';
+import type { Json } from '../../types/database.types';
 import type { ActionResult } from '../../server/errors/action-error';
 import { ActionException, toActionError } from '../../server/errors/action-error';
+import { removeOrEnqueueAssets, type CleanupAsset } from '../uploads/asset-cleanup';
 
 const MAX_ASSET_SIZE = 10_485_760;
 const mimeExtensions = {
@@ -78,6 +80,119 @@ export type AssetUploadIntent = Readonly<{
   path: string;
   token: string;
 }>;
+
+export type PublishingAssetCleanupDependencies = Readonly<{
+  authorize(): Promise<Actor>;
+  cleanupAssets(assets: readonly CleanupAsset[]): Promise<{ pending: number }>;
+}>;
+
+function defaultPublishingAssetCleanupDependencies(): PublishingAssetCleanupDependencies {
+  let identity: Awaited<ReturnType<typeof requireAdmin>> | null = null;
+  let client: ReturnType<typeof import('../../server/supabase/admin-client')['getAdminClient']> | null = null;
+
+  async function authorize() {
+    identity ??= await requireAdmin(undefined, { mutation: true });
+    return identity;
+  }
+
+  async function database() {
+    const actor = await authorize();
+    const { getAdminClient } = await import('../../server/supabase/admin-client');
+    client ??= getAdminClient(actor);
+    return client;
+  }
+
+  return {
+    authorize,
+    async cleanupAssets(assets) {
+      const db = await database();
+      return removeOrEnqueueAssets(assets, {
+        async remove(bucket, path) {
+          return db.storage.from(bucket).remove([path]);
+        },
+        async enqueue(asset) {
+          const queued = await db.from('admin_asset_cleanup_jobs').insert({
+            bucket: asset.bucket,
+            path: asset.path,
+            operation_id: asset.operationId,
+            target_type: asset.targetType,
+            last_error_at: new Date().toISOString(),
+          });
+          if (queued.error && queued.error.code !== '23505') return { error: queued.error };
+          if (!queued.error) {
+            const audit = await db.rpc('admin_record_external_action', {
+              p_actor_id: (await authorize()).userId,
+              p_action: 'asset.cleanup_pending',
+              p_target_type: 'asset',
+              p_target_id: asset.operationId,
+              p_metadata: {
+                bucket: asset.bucket,
+                path: asset.path,
+                operation_id: asset.operationId,
+              } as Json,
+            });
+            return { error: audit.error };
+          }
+          return { error: null };
+        },
+        async complete(asset) {
+          return db
+            .from('admin_asset_cleanup_jobs')
+            .update({ completed_at: new Date().toISOString() })
+            .eq('bucket', asset.bucket)
+            .eq('path', asset.path)
+            .is('completed_at', null);
+        },
+      });
+    },
+  };
+}
+
+export async function cleanupPublishingAsset(
+  rawInput: Readonly<{
+    appId: string;
+    operationId: string;
+    path: string;
+    kind: 'icon' | 'screenshot';
+  }>,
+  dependencies: PublishingAssetCleanupDependencies = defaultPublishingAssetCleanupDependencies(),
+): Promise<ActionResult<Readonly<{ cleanupPending: boolean }>>> {
+  try {
+    await dependencies.authorize();
+    const input = z.object({
+      appId: z.string().uuid(),
+      operationId: z.string().uuid(),
+      path: z.string(),
+      kind: z.enum(['icon', 'screenshot']),
+    }).parse(rawInput);
+    const folder = input.kind === 'icon' ? 'icons' : 'screenshots';
+    const pathPattern = new RegExp(
+      `^apps/${input.appId}/${folder}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(png|jpg|webp)$`,
+    );
+    if (!pathPattern.test(input.path)) throw new ActionException('VALIDATION');
+    const cleanup = await dependencies.cleanupAssets([{
+      bucket: 'app-assets',
+      path: input.path,
+      operationId: input.operationId,
+      targetType: input.kind,
+    }]);
+    return { ok: true, data: { cleanupPending: cleanup.pending > 0 } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toActionError(error instanceof z.ZodError ? new ActionException('VALIDATION') : error),
+    };
+  }
+}
+
+export async function cleanupPublishingAssetAction(rawInput: Readonly<{
+  appId: string;
+  operationId: string;
+  path: string;
+  kind: 'icon' | 'screenshot';
+}>) {
+  return cleanupPublishingAsset(rawInput);
+}
 
 export async function createAssetUploadIntent(
   rawInput: UploadIntentInput,

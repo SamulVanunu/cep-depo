@@ -22,7 +22,20 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "admin_audit_logs": {
+            "admin_asset_cleanup_jobs": {
+                  Row: {
+                    "attempts": number,"bucket": string,"completed_at": string | null,"created_at": string,"id": string,"last_error_at": string | null,"operation_id": string,"path": string,"target_type": string,"updated_at": string
+                  }
+                  Insert: {
+                    "attempts"?: number,"bucket": string,"completed_at"?: string | null,"created_at"?: string,"id"?: string,"last_error_at"?: string | null,"operation_id": string,"path": string,"target_type": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "attempts"?: number,"bucket"?: string,"completed_at"?: string | null,"created_at"?: string,"id"?: string,"last_error_at"?: string | null,"operation_id"?: string,"path"?: string,"target_type"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"admin_audit_logs": {
                   Row: {
                     "action": string,"actor_id": string,"created_at": string,"id": string,"metadata": NonNullable<Json>,"target_id": string,"target_type": string
                   }
@@ -62,13 +75,13 @@ isOneToOne: false
                   ]
                 },"app_versions": {
                   Row: {
-                    "apk_path": string | null,"apk_size_bytes": number,"apk_url": string | null,"app_id": string,"changelog": string,"created_at": string,"created_by": string | null,"download_source": Database["public"]['Enums']["apk_download_source"],"id": string,"published_at": string | null,"sha256": string,"status": Database["public"]['Enums']["version_status"],"version_code": number,"version_name": string
+                    "apk_path": string | null,"apk_size_bytes": number,"apk_url": string | null,"app_id": string,"changelog": string,"created_at": string,"created_by": string | null,"download_source": Database["public"]['Enums']["apk_download_source"],"id": string,"package_name": string | null,"published_at": string | null,"sha256": string,"status": Database["public"]['Enums']["version_status"],"version_code": number,"version_name": string
                   }
                   Insert: {
-                    "apk_path"?: string | null,"apk_size_bytes": number,"apk_url"?: string | null,"app_id": string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"download_source"?: Database["public"]['Enums']["apk_download_source"],"id"?: string,"published_at"?: string | null,"sha256": string,"status"?: Database["public"]['Enums']["version_status"],"version_code": number,"version_name": string
+                    "apk_path"?: string | null,"apk_size_bytes": number,"apk_url"?: string | null,"app_id": string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"download_source"?: Database["public"]['Enums']["apk_download_source"],"id"?: string,"package_name"?: string | null,"published_at"?: string | null,"sha256": string,"status"?: Database["public"]['Enums']["version_status"],"version_code": number,"version_name": string
                   }
                   Update: {
-                    "apk_path"?: string | null,"apk_size_bytes"?: number,"apk_url"?: string | null,"app_id"?: string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"download_source"?: Database["public"]['Enums']["apk_download_source"],"id"?: string,"published_at"?: string | null,"sha256"?: string,"status"?: Database["public"]['Enums']["version_status"],"version_code"?: number,"version_name"?: string
+                    "apk_path"?: string | null,"apk_size_bytes"?: number,"apk_url"?: string | null,"app_id"?: string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"download_source"?: Database["public"]['Enums']["apk_download_source"],"id"?: string,"package_name"?: string | null,"published_at"?: string | null,"sha256"?: string,"status"?: Database["public"]['Enums']["version_status"],"version_code"?: number,"version_name"?: string
                   }
                   Relationships: [
                     {
@@ -87,13 +100,13 @@ isOneToOne: false
                   ]
                 },"apps": {
                   Row: {
-                    "category_id": string,"created_at": string,"description": string,"download_count": number,"featured": boolean,"icon_path": string | null,"id": string,"short_description": string,"slug": string,"status": Database["public"]['Enums']["app_status"],"title": string,"updated_at": string
+                    "category_id": string,"created_at": string,"description": string,"download_count": number,"featured": boolean,"icon_path": string | null,"id": string,"package_name": string | null,"short_description": string,"slug": string,"status": Database["public"]['Enums']["app_status"],"title": string,"updated_at": string
                   }
                   Insert: {
-                    "category_id": string,"created_at"?: string,"description": string,"download_count"?: number,"featured"?: boolean,"icon_path"?: string | null,"id"?: string,"short_description": string,"slug": string,"status"?: Database["public"]['Enums']["app_status"],"title": string,"updated_at"?: string
+                    "category_id": string,"created_at"?: string,"description": string,"download_count"?: number,"featured"?: boolean,"icon_path"?: string | null,"id"?: string,"package_name"?: string | null,"short_description": string,"slug": string,"status"?: Database["public"]['Enums']["app_status"],"title": string,"updated_at"?: string
                   }
                   Update: {
-                    "category_id"?: string,"created_at"?: string,"description"?: string,"download_count"?: number,"featured"?: boolean,"icon_path"?: string | null,"id"?: string,"short_description"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["app_status"],"title"?: string,"updated_at"?: string
+                    "category_id"?: string,"created_at"?: string,"description"?: string,"download_count"?: number,"featured"?: boolean,"icon_path"?: string | null,"id"?: string,"package_name"?: string | null,"short_description"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["app_status"],"title"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -283,6 +296,9 @@ isOneToOne: false
             "admin_close_report":
 { Args: { "p_actor_id": string,"p_admin_note": string,"p_report_id": string,"p_status": Database["public"]['Enums']["report_status"] }; Returns: undefined
                            },
+"admin_delete_app_permanently":
+{ Args: { "p_actor_id": string,"p_app_id": string,"p_confirmation_title": string }; Returns: Json
+                           },
 "admin_delete_hidden_review":
 { Args: { "p_actor_id": string,"p_review_id": string }; Returns: undefined
                            },
@@ -292,8 +308,14 @@ isOneToOne: false
 "admin_publish_version_and_activate_app":
 { Args: { "p_actor_id": string,"p_version_id": string }; Returns: undefined
                            },
+"admin_publish_version_replacing_previous":
+{ Args: { "p_actor_id": string,"p_version_id": string }; Returns: string[]
+                           },
 "admin_record_external_action":
 { Args: { "p_action": string,"p_actor_id": string,"p_metadata"?: Json,"p_target_id": string,"p_target_type": string }; Returns: string
+                           },
+"admin_set_app_publication_status":
+{ Args: { "p_actor_id": string,"p_app_id": string,"p_status": Database["public"]['Enums']["app_status"] }; Returns: undefined
                            },
 "admin_set_profile_status":
 { Args: { "p_actor_id": string,"p_status": Database["public"]['Enums']["profile_status"],"p_user_id": string }; Returns: undefined

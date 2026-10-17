@@ -1,234 +1,290 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { ActionResult } from '../../server/errors/action-error';
-import type { PublishAppOption } from '../apps/publish-app-options';
+import type { PublishingAppInput } from '../apps/app-schema';
+import type { PublishingAppData } from '../apps/app-actions';
 import type { SelectedPublishApp } from './publish-types';
 
-type QuickAppResult = ActionResult<Readonly<{
-  id: string;
-  slug: string;
-  status: 'archived';
-}>>;
+type PublishingCategory = Readonly<{ id: string; name: string }>;
 
-type AppStepProps = Readonly<{
-  apps: readonly PublishAppOption[];
+type UploadAssetInput = Readonly<{
+  appId: string;
+  operationId: string;
+  kind: 'icon' | 'screenshot';
+  file: File;
+  altText: string;
+  position: number;
+}>;
+
+export type AppStepProps = Readonly<{
+  categories: readonly PublishingCategory[];
   selectedApp: SelectedPublishApp | null;
-  createQuickApp(input: Readonly<{ title: string; shortDescription: string }>): Promise<QuickAppResult>;
-  uploadIcon(appId: string, file: File): Promise<string>;
+  createPublishingApp(input: PublishingAppInput): Promise<ActionResult<PublishingAppData>>;
+  uploadAsset(input: UploadAssetInput): Promise<string>;
+  compensateNewApp(input: Readonly<{ id: string; title: string; operationId: string }>): Promise<void>;
   onContinue(app: SelectedPublishApp): void;
 }>;
 
-export function AppStep({ apps, selectedApp, createQuickApp, uploadIcon, onContinue }: AppStepProps) {
-  const [mode, setMode] = useState<'existing' | 'new'>(selectedApp?.isNew ? 'new' : 'existing');
-  const [query, setQuery] = useState('');
-  const [currentApp, setCurrentApp] = useState(selectedApp);
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLocaleLowerCase('tr-TR')
+    .replaceAll('ı', 'i')
+    .replaceAll('ğ', 'g')
+    .replaceAll('ü', 'u')
+    .replaceAll('ş', 's')
+    .replaceAll('ö', 'o')
+    .replaceAll('ç', 'c')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export function AppStep({
+  categories,
+  selectedApp,
+  createPublishingApp,
+  uploadAsset,
+  compensateNewApp,
+  onContinue,
+}: AppStepProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedIcon, setSelectedIcon] = useState<File | null>(null);
-  const [iconRetry, setIconRetry] = useState<Readonly<{ app: SelectedPublishApp; file: File }> | null>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const [slug, setSlug] = useState('');
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [icon, setIcon] = useState<File | null>(null);
+  const [screenshots, setScreenshots] = useState<readonly File[]>([]);
+  const [altTexts, setAltTexts] = useState<readonly string[]>([]);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
 
-  const filteredApps = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase('tr-TR');
-    if (!normalized) return apps;
-    return apps.filter(app => (
-      app.title.toLocaleLowerCase('tr-TR').includes(normalized)
-      || app.slug.toLocaleLowerCase('tr-TR').includes(normalized)
-    ));
-  }, [apps, query]);
+  function continueExisting() {
+    if (!selectedApp || selectedApp.isNew || pending) return;
+    try {
+      onContinue(selectedApp);
+    } catch {
+      setError('APK adımına geçilemedi. Lütfen yeniden dene.');
+    }
+  }
 
-  async function retryIcon() {
-    if (!iconRetry || pending) return;
+  async function submit(form: HTMLFormElement) {
+    if (pending) return;
+    const data = new FormData(form);
+    const input = {
+      title: String(data.get('title') ?? '').trim(),
+      slug: String(data.get('slug') ?? '').trim(),
+      categoryId: String(data.get('categoryId') ?? ''),
+      shortDescription: String(data.get('shortDescription') ?? '').trim(),
+      description: String(data.get('description') ?? '').trim(),
+      featured: data.get('featured') === 'on',
+    };
+
+    if (input.title.length < 2 || input.title.length > 90) {
+      setError('Uygulama adı 2–90 karakter olmalıdır.');
+      firstFieldRef.current?.focus();
+      return;
+    }
+    if (!input.slug || input.slug.length > 120) {
+      setError('Slug 1–120 karakter olmalıdır.');
+      return;
+    }
+    if (!input.categoryId) {
+      setError('Aktif bir kategori seçmelisin.');
+      return;
+    }
+    if (input.shortDescription.length < 10 || input.shortDescription.length > 180) {
+      setError('Kısa açıklama 10–180 karakter olmalıdır.');
+      return;
+    }
+    if (input.description.length < 10 || input.description.length > 5000) {
+      setError('Ayrıntılı açıklama 10–5000 karakter olmalıdır.');
+      return;
+    }
+    if (!icon || icon.size === 0) {
+      setError('Uygulama ikonu zorunludur.');
+      return;
+    }
+    const invalidAlt = screenshots.findIndex((_, index) => {
+      const length = (altTexts[index] ?? '').trim().length;
+      return length < 2 || length > 180;
+    });
+    if (invalidAlt >= 0) {
+      setError('Her ekran görüntüsü için 2–180 karakter alt metni girmelisin.');
+      return;
+    }
+
     setPending(true);
     setError(null);
+    let staged: PublishingAppData | null = null;
     try {
-      const iconPath = await uploadIcon(iconRetry.app.id, iconRetry.file);
-      const updatedApp = { ...iconRetry.app, iconPath };
-      setCurrentApp(updatedApp);
-      setIconRetry(null);
-      onContinue(updatedApp);
+      const result = await createPublishingApp(input);
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+      staged = result.data;
+      const iconPath = await uploadAsset({
+        appId: staged.id,
+        operationId: staged.operationId,
+        kind: 'icon',
+        file: icon,
+        altText: '',
+        position: 0,
+      });
+      const uploadedScreenshots = [];
+      for (const [position, file] of screenshots.entries()) {
+        const altText = (altTexts[position] ?? '').trim();
+        const path = await uploadAsset({
+          appId: staged.id,
+          operationId: staged.operationId,
+          kind: 'screenshot',
+          file,
+          altText,
+          position,
+        });
+        uploadedScreenshots.push({ path, altText, position });
+      }
+      onContinue({
+        id: staged.id,
+        title: input.title,
+        slug: staged.slug,
+        status: staged.status,
+        iconPath,
+        latestVersionCode: null,
+        isNew: true,
+        operationId: staged.operationId,
+        initialAssets: { iconPath, screenshots: uploadedScreenshots },
+      });
     } catch {
-      setError('İkon yüklenemedi. Dosyayı kontrol edip yeniden deneyebilirsin.');
+      if (staged) {
+        try {
+          await compensateNewApp({ id: staged.id, title: input.title, operationId: staged.operationId });
+        } catch {
+          // The permanent-delete action owns safe error reporting and durable cleanup.
+        }
+      }
+      setError('Uygulama görselleri hazırlanamadı. Temizleme başlatıldı; yeniden deneyebilirsin.');
     } finally {
       setPending(false);
     }
   }
 
-  async function create(form: HTMLFormElement) {
-    if (pending) return;
-    const data = new FormData(form);
-    const title = String(data.get('title') ?? '').trim();
-    const shortDescription = String(data.get('shortDescription') ?? '').trim();
-
-    if (title.length < 2 || title.length > 90) {
-      setError('Uygulama adı 2–90 karakter olmalıdır.');
-      titleRef.current?.focus();
-      return;
-    }
-    if (shortDescription.length < 10 || shortDescription.length > 180) {
-      setError('Kısa açıklama 10–180 karakter olmalıdır.');
-      descriptionRef.current?.focus();
-      return;
-    }
-
-    setPending(true);
-    setError(null);
-    const result = await createQuickApp({ title, shortDescription });
-    if (!result.ok) {
-      setError(result.error.message);
-      setPending(false);
-      return;
-    }
-
-    const createdApp: SelectedPublishApp = {
-      id: result.data.id,
-      title,
-      slug: result.data.slug,
-      status: result.data.status,
-      iconPath: null,
-      latestVersionCode: null,
-      isNew: true,
-    };
-    setCurrentApp(createdApp);
-
-    if (selectedIcon && selectedIcon.size > 0) {
-      try {
-        const iconPath = await uploadIcon(createdApp.id, selectedIcon);
-        const updatedApp = { ...createdApp, iconPath };
-        setCurrentApp(updatedApp);
-        setPending(false);
-        onContinue(updatedApp);
-        return;
-      } catch {
-        setIconRetry({ app: createdApp, file: selectedIcon });
-        setError('İkon yüklenemedi. Uygulama korundu; ikonu tekrar yükleyebilirsin.');
-        setPending(false);
-        return;
-      }
-    }
-
-    setPending(false);
-    onContinue(createdApp);
+  if (selectedApp && !selectedApp.isNew) {
+    return (
+      <section aria-labelledby="app-step-heading" className="record-form">
+        <div>
+          <p className="eyebrow">1. adım</p>
+          <h2 id="app-step-heading">{selectedApp.title}</h2>
+          <p className="muted">Bu uygulama için yeni bir APK hazırlıyorsun.</p>
+        </div>
+        {error ? <p aria-live="assertive" role="alert">{error}</p> : null}
+        <button className="primary-button" onClick={continueExisting} type="button">
+          APK adımına devam et
+        </button>
+      </section>
+    );
   }
 
   return (
     <section aria-labelledby="app-step-heading" className="record-form">
       <div>
         <p className="eyebrow">1. adım</p>
-        <h2 id="app-step-heading">Uygulamayı seç</h2>
-        <p className="muted">Mevcut bir uygulamaya sürüm ekle veya temel bilgilerle yenisini oluştur.</p>
+        <h2 id="app-step-heading">Uygulama bilgileri</h2>
+        <p className="muted">Katalog bilgilerini ve ilk görselleri eksiksiz hazırla.</p>
       </div>
-
-      <div aria-label="Uygulama kaynağı" className="button-row" role="group">
-        <button
-          aria-pressed={mode === 'existing'}
-          className="secondary-button"
-          onClick={() => { setMode('existing'); setError(null); }}
-          type="button"
-        >
-          Mevcut uygulama
-        </button>
-        <button
-          aria-pressed={mode === 'new'}
-          className="secondary-button"
-          onClick={() => { setMode('new'); setError(null); }}
-          type="button"
-        >
-          Yeni uygulama oluştur
-        </button>
-      </div>
-
-      {mode === 'existing' ? (
-        <fieldset className="record-form">
-          <legend className="sr-only">Mevcut uygulama seçimi</legend>
-          <label className="field">
-            <span>Uygulama ara</span>
+      <form className="record-form" noValidate onSubmit={event => {
+        event.preventDefault();
+        void submit(event.currentTarget);
+      }}>
+        <label className="field">
+          <span>Uygulama adı</span>
+          <input
+            autoComplete="off"
+            maxLength={90}
+            name="title"
+            onChange={event => {
+              if (!slugEdited) setSlug(slugify(event.currentTarget.value));
+            }}
+            ref={firstFieldRef}
+          />
+        </label>
+        <label className="field">
+          <span>Slug</span>
+          <input
+            autoComplete="off"
+            maxLength={120}
+            name="slug"
+            onChange={event => { setSlugEdited(true); setSlug(event.currentTarget.value); }}
+            spellCheck={false}
+            value={slug}
+          />
+        </label>
+        <label className="field">
+          <span>Kategori</span>
+          <select defaultValue="" name="categoryId">
+            <option disabled value="">Aktif kategori seç</option>
+            {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Kısa açıklama</span>
+          <textarea maxLength={180} name="shortDescription" rows={3} />
+        </label>
+        <label className="field">
+          <span>Ayrıntılı açıklama</span>
+          <textarea maxLength={5000} name="description" rows={8} />
+        </label>
+        <label className="field checkbox-field">
+          <input name="featured" type="checkbox" />
+          <span>Öne çıkar</span>
+        </label>
+        <label className="field">
+          <span>Uygulama ikonu</span>
+          <input
+            accept="image/png,image/jpeg,image/webp"
+            name="icon"
+            onChange={event => setIcon(event.currentTarget.files?.[0] ?? null)}
+            type="file"
+          />
+        </label>
+        <label className="field">
+          <span>Ekran görüntüleri</span>
+          <input
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            name="screenshots"
+            onChange={event => {
+              const files = Array.from(event.currentTarget.files ?? []);
+              setScreenshots(files);
+              setAltTexts(files.map(() => ''));
+            }}
+            type="file"
+          />
+        </label>
+        {screenshots.map((file, index) => (
+          <label className="field" key={`${file.name}-${file.size}-${index}`}>
+            <span>{file.name} alt metni</span>
             <input
-              aria-label="Uygulama ara"
-              autoComplete="off"
-              name="appQuery"
-              onChange={event => setQuery(event.currentTarget.value)}
-              placeholder="Ad veya slug…"
-              spellCheck={false}
-              type="search"
-              value={query}
-            />
-          </label>
-          <div className="app-selection-list">
-            {filteredApps.map(app => (
-              <button
-                aria-pressed={currentApp?.id === app.id}
-                className="secondary-button"
-                key={app.id}
-                onClick={() => setCurrentApp({ ...app, isNew: false })}
-                type="button"
-              >
-                <strong>{app.title}</strong>
-                <span>{app.latestVersionCode === null ? 'Henüz sürüm yok' : `Son sürüm kodu: ${app.latestVersionCode}`}</span>
-              </button>
-            ))}
-          </div>
-          <button
-            className="primary-button"
-            disabled={!currentApp}
-            onClick={() => { if (currentApp) onContinue(currentApp); }}
-            type="button"
-          >
-            APK adımına devam et
-          </button>
-        </fieldset>
-      ) : (
-        <form
-          className="record-form"
-          noValidate
-          onSubmit={event => {
-            event.preventDefault();
-            void create(event.currentTarget).catch(() => {
-              setPending(false);
-              setError('Uygulama oluşturulamadı. Lütfen yeniden dene.');
-            });
-          }}
-        >
-          <label className="field">
-            <span>Uygulama adı</span>
-            <input aria-describedby={error ? 'app-step-error' : undefined} autoComplete="off" maxLength={90} name="title" ref={titleRef} />
-          </label>
-          <label className="field">
-            <span>Kısa açıklama</span>
-            <textarea
-              aria-describedby={error ? 'app-step-error' : undefined}
-              autoComplete="off"
+              aria-label={`${file.name} alt metni`}
               maxLength={180}
-              name="shortDescription"
-              ref={descriptionRef}
-              rows={4}
+              minLength={2}
+              onChange={event => {
+                const nextValue = event.currentTarget.value;
+                setAltTexts(current => current.map((value, position) => (
+                  position === index ? nextValue : value
+                )));
+              }}
+              value={altTexts[index] ?? ''}
             />
           </label>
-          <label className="field">
-            <span>Uygulama ikonu (isteğe bağlı)</span>
-            <input
-              accept="image/png,image/jpeg,image/webp"
-              aria-label="Uygulama ikonu"
-              name="icon"
-              onChange={event => setSelectedIcon(event.currentTarget.files?.[0] ?? null)}
-              type="file"
-            />
-          </label>
-          {error ? <p aria-live="assertive" id="app-step-error" role="alert">{error}</p> : null}
-          {iconRetry ? (
-            <button className="secondary-button" disabled={pending} onClick={() => void retryIcon()} type="button">
-              İkonu tekrar yükle
-            </button>
-          ) : (
-            <button className="primary-button" disabled={pending} type="submit">
-              {pending ? 'Oluşturuluyor…' : 'Uygulamayı oluştur'}
-            </button>
-          )}
-        </form>
-      )}
+        ))}
+        {error ? <p aria-live="assertive" role="alert">{error}</p> : null}
+        <button className="primary-button" disabled={pending} type="submit">
+          {pending ? 'Hazırlanıyor…' : 'APK adımına devam et'}
+        </button>
+      </form>
     </section>
   );
 }

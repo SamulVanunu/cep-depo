@@ -1,26 +1,21 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  addTestAppIcon,
   cleanupTestApp,
   cleanupTestUser,
+  createPublishedTestApp,
   createTestApp,
   createTestUser,
   collectBrowserErrors,
   serviceClient,
   uniqueValue,
 } from './helpers';
+import { manifestApk, onePixelPng } from './fixtures/manifest-apk';
 
 test.use({ storageState: 'e2e/.auth/admin.json' });
 
 let browserErrors: string[] = [];
-const onePixelPng = {
-  name: 'pixel.png',
-  mimeType: 'image/png',
-  buffer: Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-    'base64',
-  ),
-};
 test.beforeEach(async ({ page }) => {
   browserErrors = collectBrowserErrors(page);
 });
@@ -45,40 +40,63 @@ test('admin can navigate all operations queues and logout', async ({ page }) => 
   await expect(page).toHaveURL(/\/login$/);
 });
 
-test('admin creates and explicitly publishes a new app in the default category', async ({ page }) => {
+test('admin creates a complete app and automatically publishes manifest-derived Storage metadata', async ({ page }) => {
   const title = `E2E ${uniqueValue('publish')}`;
+  const packageName = `com.cepdepo.e2e${crypto.randomUUID().replaceAll('-', '')}`;
+  const versionCode = 1_000_000 + Math.floor(Math.random() * 500_000);
+  const apk = await manifestApk({ packageName, versionName: '1.0-e2e', versionCode });
   let appId: string | undefined;
   try {
     await page.goto('/publish');
-    await page.getByRole('button', { name: 'Yeni uygulama oluştur' }).click();
     await page.getByLabel('Uygulama adı').fill(title);
     await page.getByLabel('Kısa açıklama').fill('E2E yeni uygulama yayınlama akışı açıklaması.');
-    await page.getByRole('button', { name: 'Uygulamayı oluştur' }).click();
+    await page.getByLabel('Ayrıntılı açıklama').fill('Manifest bilgileriyle otomatik yayınlanan E2E uygulaması.');
+    await page.getByLabel('Kategori').selectOption({ index: 1 });
+    await page.getByLabel('Uygulama ikonu').setInputFiles(onePixelPng);
+    await page.getByLabel('Ekran görüntüleri').setInputFiles({ ...onePixelPng, name: 'screen.png' });
+    await page.getByLabel('screen.png alt metni').fill('E2E uygulama ekranı');
+    await page.getByRole('button', { name: 'APK adımına devam et' }).click();
     await expect(page.getByRole('heading', { name: 'APK bilgileri' })).toBeFocused();
     const created = await serviceClient.from('apps').select('id, slug').eq('title', title).single();
     expect(created.error).toBeNull();
     appId = created.data?.id;
-    const versionCode = 1_000_000 + Math.floor(Math.random() * 500_000);
-    await page.getByLabel('APK dosyası', { exact: true }).setInputFiles('e2e/fixtures/test.apk');
-    await page.getByLabel('Sürüm adı').fill('1.0-e2e');
-    await page.getByLabel('Sürüm kodu').fill(String(versionCode));
+    await page.getByLabel('APK dosyası', { exact: true }).setInputFiles(apk);
+    const manifest = page.getByRole('region', { name: 'APK manifest özeti' });
+    await expect(manifest).toContainText(packageName);
+    await expect(manifest).toContainText('1.0-e2e');
+    await expect(manifest).toContainText(String(versionCode));
     await page.getByLabel('Değişiklik notları').fill('Yeni uygulama E2E yayını.');
-    await page.getByRole('button', { name: 'APK dosyasını doğrula' }).click();
-    await expect(page.getByRole('progressbar')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Kontrol ve yayın' })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/SHA-256 doğrulamasını göster/)).toBeVisible();
-    await page.getByRole('button', { name: 'Yayınla' }).click();
-    await expect(page.getByRole('heading', { name: 'Yayın tamamlandı' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Yayınla', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: "APK'yı yükle ve yayınla" }).click();
+    await expect(page.getByRole('heading', { name: 'Yayın tamamlandı' })).toBeVisible({ timeout: 20_000 });
 
     await expect.poll(async () => {
       const state = await serviceClient
         .from('apps')
-        .select('status, categories(slug), app_versions(id, status, version_code)')
+        .select('status, package_name, icon_path, categories(slug), app_screenshots(alt_text), app_versions(id, status, version_code, version_name, package_name)')
         .eq('id', appId!)
         .single();
       const version = state.data?.app_versions.find(item => item.version_code === versionCode);
-      return { app: state.data?.status, category: state.data?.categories?.slug, version: version?.status };
-    }).toEqual({ app: 'active', category: 'genel', version: 'published' });
+      return {
+        app: state.data?.status,
+        category: state.data?.categories?.slug,
+        icon: Boolean(state.data?.icon_path),
+        packageName: state.data?.package_name,
+        screenshotAlt: state.data?.app_screenshots[0]?.alt_text,
+        version: version && {
+          status: version.status,
+          packageName: version.package_name,
+          versionName: version.version_name,
+        },
+      };
+    }).toEqual({
+      app: 'active',
+      category: 'genel',
+      icon: true,
+      packageName,
+      screenshotAlt: 'E2E uygulama ekranı',
+      version: { status: 'published', packageName, versionName: '1.0-e2e' },
+    });
 
     const versions = await serviceClient.from('app_versions').select('id').eq('app_id', appId!);
     expect(versions.data).toHaveLength(1);
@@ -90,6 +108,7 @@ test('admin creates and explicitly publishes a new app in the default category',
     expect(audits.data?.filter(row => row.action === 'version.draft')).toHaveLength(1);
     expect(audits.data?.filter(row => row.action === 'version.publish')).toHaveLength(1);
     expect(audits.data?.filter(row => row.action === 'app.activate')).toHaveLength(1);
+    await expect(page.getByText(/taslak/i)).toHaveCount(0);
   } finally {
     const existing = appId
       ? { data: { id: appId } }
@@ -98,28 +117,48 @@ test('admin creates and explicitly publishes a new app in the default category',
   }
 });
 
-test('admin retries validation and publishes to an existing app without duplication', async ({ page }) => {
-  const app = await createTestApp('e2e-upload');
+test('failed update preserves the current release and a higher matching version replaces it', async ({ page }) => {
+  const packageName = `com.cepdepo.update${crypto.randomUUID().replaceAll('-', '')}`;
+  const initialCode = 1_500_000 + Math.floor(Math.random() * 100_000);
+  const app = await createPublishedTestApp({ prefix: 'e2e-update', packageName, versionCode: initialCode });
   try {
-    const versionCode = 1_500_000 + Math.floor(Math.random() * 500_000);
+    const rejectedApk = await manifestApk({
+      packageName: `com.cepdepo.wrong${crypto.randomUUID().replaceAll('-', '')}`,
+      versionName: '9.8-e2e',
+      versionCode: initialCode + 1,
+    });
     await page.goto(`/publish?appId=${encodeURIComponent(app.id)}`);
     await page.getByRole('button', { name: 'APK adımına devam et' }).click();
-    await page.getByLabel('Sürüm adı').fill('9.9-e2e');
-    await page.getByLabel('Sürüm kodu').fill(String(versionCode));
-    await page.getByRole('button', { name: 'APK dosyasını doğrula' }).click();
-    await expect(page.locator('#apk-step-error')).toContainText('APK');
-    await page.getByLabel('APK dosyası', { exact: true }).setInputFiles('e2e/fixtures/test.apk');
-    await page.getByLabel('Değişiklik notları').fill('E2E upload doğrulaması.');
-    await page.getByRole('button', { name: 'Tekrar dene' }).click();
-    await expect(page.getByRole('heading', { name: 'Kontrol ve yayın' })).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('button', { name: 'Yayınla' }).click();
+    await page.getByLabel('APK dosyası', { exact: true }).setInputFiles(rejectedApk);
+    await page.getByRole('button', { name: "APK'yı yükle ve yayınla" }).click();
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 20_000 });
+
+    const preserved = await serviceClient
+      .from('app_versions')
+      .select('id, status, version_code')
+      .eq('app_id', app.id)
+      .eq('status', 'published');
+    expect(preserved.data).toEqual([{ id: app.versionId, status: 'published', version_code: initialCode }]);
+
+    const versionCode = initialCode + 2;
+    const acceptedApk = await manifestApk({ packageName, versionName: '9.9-e2e', versionCode });
+    await page.goto(`/publish?appId=${encodeURIComponent(app.id)}`);
+    await page.getByRole('button', { name: 'APK adımına devam et' }).click();
+    await page.getByLabel('APK dosyası', { exact: true }).setInputFiles(acceptedApk);
+    await page.getByLabel('Değişiklik notları').fill('E2E güncelleme doğrulaması.');
+    await page.getByRole('button', { name: "APK'yı yükle ve yayınla" }).click();
+    await expect(page.getByRole('heading', { name: 'Yayın tamamlandı' })).toBeVisible({ timeout: 20_000 });
     await expect.poll(async () => {
-      const [versions, apps] = await Promise.all([
-        serviceClient.from('app_versions').select('status').eq('app_id', app.id).eq('version_code', versionCode),
-        serviceClient.from('apps').select('id').eq('slug', app.slug),
-      ]);
-      return { appCount: apps.data?.length, versionCount: versions.data?.length, status: versions.data?.[0]?.status };
-    }).toEqual({ appCount: 1, versionCount: 1, status: 'published' });
+      const versions = await serviceClient
+        .from('app_versions')
+        .select('status, version_code, package_name')
+        .eq('app_id', app.id);
+      return versions.data;
+    }).toEqual([{ status: 'published', version_code: versionCode, package_name: packageName }]);
+
+    await page.getByRole('link', { name: 'Uygulamayı yönet' }).click();
+    await expect(page.getByText(`9.9-e2e · Kod ${versionCode} · published`)).toBeVisible();
+    await expect(page.getByText(/draft/)).toHaveCount(0);
   } finally {
     await cleanupTestApp(app.id);
   }
@@ -142,31 +181,24 @@ test('admin sees visual uploads without reloading the app detail page', async ({
   }
 });
 
-test('admin publishes an external APK and activates an archived app without APK Storage', async ({ page }) => {
+test('external auto-publication supports unpublish, republish and typed permanent deletion', async ({ page }) => {
   const app = await createTestApp('e2e-external');
+  const packageName = `com.cepdepo.external${crypto.randomUUID().replaceAll('-', '')}`;
   const versionCode = 2_000_000 + Math.floor(Math.random() * 500_000);
+  const apk = await manifestApk({ packageName, versionName: '3.1-e2e', versionCode });
   try {
-    await page.goto(`/apps/${app.id}`);
-    await page.getByRole('button', { name: 'Arşivlemeyi onayla' }).click();
-    await expect.poll(async () => (
-      await serviceClient.from('apps').select('status').eq('id', app.id).single()
-    ).data?.status).toBe('archived');
-
+    await addTestAppIcon(app.id);
     await page.goto(`/publish?appId=${encodeURIComponent(app.id)}`);
     await page.getByRole('button', { name: 'APK adımına devam et' }).click();
     await page.getByRole('radio', { name: 'HTTPS APK linki kullan' }).check();
-    await page.getByLabel('1. Aynı APK’nın yerel kopyası').setInputFiles('e2e/fixtures/test.apk');
+    await page.getByLabel('1. Aynı APK’nın yerel kopyası').setInputFiles(apk);
     await page.getByLabel('2. Doğrudan HTTPS APK bağlantısı').fill(
       'https://downloads.example.com/releases/test.apk',
     );
-    await page.getByLabel('Sürüm adı').fill('3.1-e2e');
-    await page.getByLabel('Sürüm kodu').fill(String(versionCode));
     await page.getByLabel('Değişiklik notları').fill('Harici APK E2E yayını.');
-    await page.getByRole('button', { name: 'Harici APK bilgilerini doğrula' }).click();
-    await expect(page.getByRole('heading', { name: 'Kontrol ve yayın' })).toBeVisible();
-    await expect(page.getByText('downloads.example.com')).toBeVisible();
-    await page.getByRole('button', { name: 'Yayınla' }).click();
-    await expect(page.getByRole('heading', { name: 'Yayın tamamlandı' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'APK manifest özeti' })).toContainText(packageName);
+    await page.getByRole('button', { name: "APK'yı yükle ve yayınla" }).click();
+    await expect(page.getByRole('heading', { name: 'Yayın tamamlandı' })).toBeVisible({ timeout: 20_000 });
 
     await expect.poll(async () => {
       const state = await serviceClient
@@ -186,6 +218,24 @@ test('admin publishes an external APK and activates an archived app without APK 
     const objects = await serviceClient.storage.from('apks').list(`apps/${app.id}/versions`);
     expect(objects.error).toBeNull();
     expect(objects.data ?? []).toHaveLength(0);
+
+    await page.getByRole('link', { name: 'Uygulamayı yönet' }).click();
+    await page.getByRole('button', { name: 'Yayından kaldır' }).click();
+    await expect.poll(async () => (
+      await serviceClient.from('apps').select('status').eq('id', app.id).single()
+    ).data?.status).toBe('archived');
+    await page.reload();
+    await page.getByRole('button', { name: 'Tekrar yayınla' }).click();
+    await expect.poll(async () => (
+      await serviceClient.from('apps').select('status').eq('id', app.id).single()
+    ).data?.status).toBe('active');
+    await page.reload();
+    await page.getByLabel(new RegExp(app.title)).fill(app.title);
+    await page.getByRole('button', { name: 'Kalıcı sil' }).click();
+    await expect(page).toHaveURL(/\/apps$/);
+    await expect.poll(async () => (
+      await serviceClient.from('apps').select('id').eq('id', app.id).maybeSingle()
+    ).data).toBeNull();
   } finally {
     await cleanupTestApp(app.id);
   }

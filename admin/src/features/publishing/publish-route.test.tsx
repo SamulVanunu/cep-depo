@@ -3,12 +3,13 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { listPublishApps, redirect } = vi.hoisted(() => ({
+const { listPublishApps, listCategories, redirect } = vi.hoisted(() => ({
   listPublishApps: vi.fn(),
+  listCategories: vi.fn(),
   redirect: vi.fn(),
 }));
 
-vi.mock('../apps/app-dal', () => ({ listPublishApps }));
+vi.mock('../apps/app-dal', () => ({ listPublishApps, listCategories }));
 vi.mock('next/navigation', () => ({ redirect }));
 
 import PublishPage from '../../../app/(dashboard)/publish/page';
@@ -18,6 +19,7 @@ describe('publish routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listPublishApps.mockResolvedValue([]);
+    listCategories.mockResolvedValue([]);
   });
 
   it('renders a recoverable warning for an invalid app query', async () => {

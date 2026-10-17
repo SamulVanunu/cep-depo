@@ -613,6 +613,7 @@ tbody tr:hover { background: var(--surface-raised); }
 .detail-list dd { margin: 0; }
 .desktop-delete-warning { display: none; }
 .delete-user-form { display: grid; gap: 1rem; margin-top: 1rem; }
+.delete-app-form { display: grid; gap: 1rem; margin-top: 1rem; }
 
 @media (max-width: 70rem) {
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

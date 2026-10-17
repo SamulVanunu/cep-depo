@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  addTestAppIcon,
   cleanupTestApp,
   cleanupTestUser,
   collectBrowserErrors,
@@ -8,6 +9,7 @@ import {
   createTestUser,
   serviceClient,
 } from './helpers';
+import { manifestApk } from './fixtures/manifest-apk';
 
 test.use({ storageState: 'e2e/.auth/admin.json' });
 
@@ -30,15 +32,17 @@ test('dashboard provides landmarks, current navigation and visible keyboard focu
 
 test('publish wizard announces steps, focuses errors and supports keyboard publication', async ({ page }) => {
   const app = await createTestApp('e2e-a11y-publish');
+  const packageName = `com.cepdepo.a11y${crypto.randomUUID().replaceAll('-', '')}`;
+  const versionCode = 1_800_000 + Math.floor(Math.random() * 100_000);
+  const apk = await manifestApk({ packageName, versionName: 'a11y-e2e', versionCode });
   try {
+    await addTestAppIcon(app.id);
     await page.goto('/publish');
     const steps = page.getByRole('list', { name: 'Yayın adımları' });
     await expect(steps.locator('[aria-current="step"]')).toContainText('Uygulama');
-    await page.getByRole('button', { name: 'Yeni uygulama oluştur' }).focus();
+    await page.getByRole('button', { name: 'APK adımına devam et' }).focus();
     await page.keyboard.press('Enter');
-    await page.getByRole('button', { name: 'Uygulamayı oluştur' }).focus();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('#app-step-error')).toContainText('Uygulama adı');
+    await expect(page.getByText(/Uygulama adı 2–90 karakter/)).toHaveAttribute('role', 'alert');
     await expect(page.getByLabel('Uygulama adı')).toBeFocused();
 
     await page.goto(`/publish?appId=${encodeURIComponent(app.id)}`);
@@ -47,20 +51,11 @@ test('publish wizard announces steps, focuses errors and supports keyboard publi
     await page.keyboard.press('Enter');
     await expect(steps.locator('[aria-current="step"]')).toContainText('APK');
     await expect(page.getByLabel('APK dosyası', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Sürüm adı')).toBeVisible();
-    await expect(page.getByLabel('Sürüm kodu')).toBeVisible();
-
-    const versionCode = 1_800_000 + Math.floor(Math.random() * 100_000);
-    await page.getByLabel('APK dosyası', { exact: true }).setInputFiles('e2e/fixtures/test.apk');
-    await page.getByLabel('Sürüm adı').fill('a11y-e2e');
-    await page.getByLabel('Sürüm kodu').fill(String(versionCode));
-    await page.getByRole('button', { name: 'APK dosyasını doğrula' }).focus();
+    await page.getByLabel('APK dosyası', { exact: true }).setInputFiles(apk);
+    await expect(page.getByRole('region', { name: 'APK manifest özeti' })).toContainText(packageName);
+    await page.getByRole('button', { name: "APK'yı yükle ve yayınla" }).focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow');
-    await expect(steps.locator('[aria-current="step"]')).toContainText('Kontrol ve yayın', { timeout: 20_000 });
-    await page.getByRole('button', { name: 'Yayınla' }).focus();
-    await page.keyboard.press('Enter');
-    await expect(page.getByRole('status')).toContainText('Yayın tamamlandı');
+    await expect(page.getByRole('status').filter({ hasText: 'Yayın tamamlandı' })).toBeVisible({ timeout: 20_000 });
   } finally {
     await cleanupTestApp(app.id);
   }
@@ -73,7 +68,7 @@ test('narrow publish layout keeps APK controls visible without page overflow', a
     await page.goto(`/publish?appId=${encodeURIComponent(app.id)}`);
     await page.getByRole('button', { name: 'APK adımına devam et' }).click();
     await expect(page.getByLabel('APK dosyası', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'APK dosyasını doğrula' })).toBeVisible();
+    await expect(page.getByRole('button', { name: "APK'yı yükle ve yayınla" })).toBeVisible();
     const sizes = await page.evaluate(() => ({
       viewport: document.documentElement.clientWidth,
       content: document.documentElement.scrollWidth,

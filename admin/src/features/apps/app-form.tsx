@@ -70,13 +70,6 @@ export function AppForm({
           <span>Açıklama</span>
           <textarea autoComplete="off" defaultValue={app?.description} maxLength={5000} minLength={10} name="description" required rows={10} />
         </label>
-        <label className="field">
-          <span>Durum</span>
-          <select defaultValue={app?.status ?? 'active'} name="status">
-            <option value="active">Aktif</option>
-            <option value="archived">Arşivlenmiş</option>
-          </select>
-        </label>
         <label className="check-field">
           <input defaultChecked={app?.featured} name="featured" type="checkbox" />
           <span>Öne çıkar</span>

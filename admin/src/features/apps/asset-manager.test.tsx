@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   requestAssetUpload: vi.fn(),
   setAppIcon: vi.fn(),
   addScreenshot: vi.fn(),
+  cleanupPublishingAsset: vi.fn(),
   uploadToSignedUrl: vi.fn(),
 }));
 
@@ -19,6 +20,7 @@ vi.mock('./asset-actions', () => ({
   requestAssetUploadAction: mocks.requestAssetUpload,
   setAppIconAction: mocks.setAppIcon,
   addScreenshotAction: mocks.addScreenshot,
+  cleanupPublishingAssetAction: mocks.cleanupPublishingAsset,
 }));
 vi.mock('../../lib/supabase/browser', () => ({
   createBrowserSupabaseClient: () => ({
@@ -38,6 +40,7 @@ function successSetup() {
   mocks.uploadToSignedUrl.mockResolvedValue({ error: null });
   mocks.setAppIcon.mockResolvedValue({ ok: true, data: null });
   mocks.addScreenshot.mockResolvedValue({ ok: true, data: null });
+  mocks.cleanupPublishingAsset.mockResolvedValue({ ok: true, data: { cleanupPending: false } });
 }
 
 describe('AssetManager', () => {
@@ -70,6 +73,11 @@ describe('AssetManager', () => {
     });
     expect(await screen.findByRole('status')).toHaveTextContent('Güvenli hata.');
     expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.cleanupPublishingAsset).toHaveBeenCalledWith(expect.objectContaining({
+      appId,
+      path: iconPath,
+      kind: 'icon',
+    }));
     expect(screen.queryByRole('img', { name: 'Mevcut uygulama ikonu' })).not.toBeInTheDocument();
   });
 

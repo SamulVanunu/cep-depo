@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient, getPublicAssetUrl } from '../../lib/supabase/browser';
 import {
   addScreenshotAction,
+  cleanupPublishingAssetAction,
   requestAssetUploadAction,
   setAppIconAction,
 } from './asset-actions';
@@ -26,6 +27,7 @@ export function AssetManager({ appId, iconPath, screenshotCount }: Readonly<{
     altText = '',
     form?: HTMLFormElement,
   ) {
+    const operationId = crypto.randomUUID();
     setPending(true);
     setMessage(null);
     const intent = await requestAssetUploadAction({
@@ -65,6 +67,12 @@ export function AssetManager({ appId, iconPath, screenshotCount }: Readonly<{
       setMessage('Görsel yüklendi.');
       router.refresh();
     } else {
+      await cleanupPublishingAssetAction({
+        appId,
+        operationId,
+        path: intent.data.path,
+        kind,
+      });
       setMessage(saved.error.message);
     }
     setPending(false);

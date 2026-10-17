@@ -28,6 +28,7 @@ export type UploadActionDependencies = Readonly<{
     actorId: string;
     appId: string;
     versionId: string;
+    packageName: string;
     versionName: string;
     versionCode: number;
     changelog: string;
@@ -75,12 +76,13 @@ export async function createUploadIntent(
 }
 
 export async function finalizeUpload(
-  raw: z.input<typeof finalizeUploadSchema>,
+  raw: unknown,
   dependencies: UploadActionDependencies,
 ): Promise<ActionResult<Readonly<{ id: string; status: 'draft' }>>> {
   try {
     const actor = await dependencies.authorize();
     const input = finalizeUploadSchema.parse(raw);
+    if (input.source !== 'storage') throw new ActionException('VALIDATION');
     if (!(await dependencies.appExists(input.appId))) throw new ActionException('NOT_FOUND');
     const draftPath = `operations/${input.operationId}/source.apk`;
     const object = await dependencies.inspectObject(draftPath);
@@ -100,6 +102,7 @@ export async function finalizeUpload(
       actorId: actor.userId,
       appId: input.appId,
       versionId,
+      packageName: input.packageName,
       versionName: input.versionName,
       versionCode: input.versionCode,
       changelog: input.changelog,
@@ -182,6 +185,7 @@ function defaultDependencies(): UploadActionDependencies {
       return db.from('app_versions').insert({
         id: input.versionId,
         app_id: input.appId,
+        package_name: input.packageName,
         version_name: input.versionName,
         version_code: input.versionCode,
         changelog: input.changelog,
