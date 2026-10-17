@@ -34,7 +34,7 @@ const COMPRESSION_DEFLATE = 8;
 
 const RES_XML_TYPE = 0x0003;
 const RES_STRING_POOL_TYPE = 0x0001;
-const RES_XML_START_ELEMENT_TYPE = 0x0200;
+const RES_XML_START_ELEMENT_TYPE = 0x0102;
 const RAW_VALUE_IDX_ABSENT = 0xffffffff;
 
 function reject(): never {

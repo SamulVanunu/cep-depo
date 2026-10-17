@@ -18,7 +18,7 @@ import { concatUint8Arrays } from './zip-util';
 
 const RES_XML_TYPE = 0x0003;
 const RES_STRING_POOL_TYPE = 0x0001;
-const RES_XML_START_ELEMENT_TYPE = 0x0200;
+const RES_XML_START_ELEMENT_TYPE = 0x0102;
 
 function utf8StringBytes(s: string): Uint8Array {
   // AXML UTF-8 string cell: [discard length cell][ULEB128 char length][UTF-8 bytes]

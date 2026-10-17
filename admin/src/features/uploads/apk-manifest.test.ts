@@ -53,6 +53,22 @@ describe('parseApkManifest', () => {
     });
   });
 
+  it('parses the standard Android AXML start-element chunk type', async () => {
+    const { buildManifestXml } = await import('./fixtures/manifest-apk');
+    const axml = buildManifestXml({
+      packageName: 'com.nuvio.tv',
+      versionName: '1.0.0',
+      versionCode: 1062,
+    });
+    const file = await createApkFromXmlBytes(axml);
+
+    await expect(parseApkManifest(file)).resolves.toMatchObject({
+      packageName: 'com.nuvio.tv',
+      versionName: '1.0.0',
+      versionCode: 1062,
+    });
+  });
+
   it('omits optional SDK versions when not declared', async () => {
     const file = await createValidApk({
       packageName: 'com.example.app',
