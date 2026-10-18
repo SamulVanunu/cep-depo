@@ -13,26 +13,26 @@ select results_eq(
 );
 
 select results_eq(
-  $$select title from public.search_catalog('IPTV', null, 'popular')$$,
+  $$select title from public.search_catalog('IPTV', null, 'popular', null)$$,
   array['Cep İptv']::text[],
   'search is Turkish-case tolerant'
 );
 
 select results_eq(
-  $$select title from public.search_catalog('eglence', 'eglence', 'newest')$$,
+  $$select title from public.search_catalog('eglence', 'eglence', 'newest', null)$$,
   array['Radyo Cep', 'Cep İptv']::text[],
   'search is diacritic tolerant and newest ordering is stable'
 );
 
 select throws_ok(
-  $$select * from public.search_catalog('', null, 'unsupported')$$,
+  $$select * from public.search_catalog('', null, 'unsupported', null)$$,
   '22023',
   'Desteklenmeyen katalog sıralaması: unsupported',
   'search rejects unknown sort values'
 );
 
 select results_eq(
-  $$select count(*)::bigint from public.search_catalog('%', null, 'popular')$$,
+  $$select count(*)::bigint from public.search_catalog('%', null, 'popular', null)$$,
   array[0::bigint],
   'search treats SQL wildcard characters as literal text'
 );

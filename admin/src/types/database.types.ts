@@ -1,3 +1,4 @@
+
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
@@ -75,13 +76,13 @@ isOneToOne: false
                   ]
                 },"app_versions": {
                   Row: {
-                    "apk_path": string | null,"apk_size_bytes": number,"apk_url": string | null,"app_id": string,"changelog": string,"created_at": string,"created_by": string | null,"download_source": Database["public"]['Enums']["apk_download_source"],"id": string,"package_name": string | null,"published_at": string | null,"sha256": string,"status": Database["public"]['Enums']["version_status"],"version_code": number,"version_name": string
+                    "account_requirement": Database["public"]['Enums']["account_requirement"],"apk_path": string | null,"apk_size_bytes": number,"apk_url": string | null,"app_id": string,"changelog": string,"created_at": string,"created_by": string | null,"download_source": Database["public"]['Enums']["apk_download_source"],"id": string,"package_name": string | null,"published_at": string | null,"sha256": string,"status": Database["public"]['Enums']["version_status"],"supports_mobile": boolean,"supports_tv": boolean,"version_code": number,"version_name": string
                   }
                   Insert: {
-                    "apk_path"?: string | null,"apk_size_bytes": number,"apk_url"?: string | null,"app_id": string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"download_source"?: Database["public"]['Enums']["apk_download_source"],"id"?: string,"package_name"?: string | null,"published_at"?: string | null,"sha256": string,"status"?: Database["public"]['Enums']["version_status"],"version_code": number,"version_name": string
+                    "account_requirement"?: Database["public"]['Enums']["account_requirement"],"apk_path"?: string | null,"apk_size_bytes": number,"apk_url"?: string | null,"app_id": string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"download_source"?: Database["public"]['Enums']["apk_download_source"],"id"?: string,"package_name"?: string | null,"published_at"?: string | null,"sha256": string,"status"?: Database["public"]['Enums']["version_status"],"supports_mobile"?: boolean,"supports_tv"?: boolean,"version_code": number,"version_name": string
                   }
                   Update: {
-                    "apk_path"?: string | null,"apk_size_bytes"?: number,"apk_url"?: string | null,"app_id"?: string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"download_source"?: Database["public"]['Enums']["apk_download_source"],"id"?: string,"package_name"?: string | null,"published_at"?: string | null,"sha256"?: string,"status"?: Database["public"]['Enums']["version_status"],"version_code"?: number,"version_name"?: string
+                    "account_requirement"?: Database["public"]['Enums']["account_requirement"],"apk_path"?: string | null,"apk_size_bytes"?: number,"apk_url"?: string | null,"app_id"?: string,"changelog"?: string,"created_at"?: string,"created_by"?: string | null,"download_source"?: Database["public"]['Enums']["apk_download_source"],"id"?: string,"package_name"?: string | null,"published_at"?: string | null,"sha256"?: string,"status"?: Database["public"]['Enums']["version_status"],"supports_mobile"?: boolean,"supports_tv"?: boolean,"version_code"?: number,"version_name"?: string
                   }
                   Relationships: [
                     {
@@ -266,7 +267,7 @@ isOneToOne: false
           Views: {
             "catalog_app_cards": {
                   Row: {
-                    "apk_path": string | null,"apk_size_bytes": number | null,"apk_url": string | null,"app_id": string | null,"category_id": string | null,"category_name": string | null,"category_slug": string | null,"download_count": number | null,"download_source": Database["public"]['Enums']["apk_download_source"] | null,"featured": boolean | null,"icon_path": string | null,"published_at": string | null,"sha256": string | null,"short_description": string | null,"slug": string | null,"title": string | null,"version_changelog": string | null,"version_code": number | null,"version_id": string | null,"version_name": string | null
+                    "account_requirement": Database["public"]['Enums']["account_requirement"] | null,"apk_path": string | null,"apk_size_bytes": number | null,"apk_url": string | null,"app_id": string | null,"category_id": string | null,"category_name": string | null,"category_slug": string | null,"download_count": number | null,"download_source": Database["public"]['Enums']["apk_download_source"] | null,"featured": boolean | null,"icon_path": string | null,"published_at": string | null,"sha256": string | null,"short_description": string | null,"slug": string | null,"supports_mobile": boolean | null,"supports_tv": boolean | null,"title": string | null,"version_changelog": string | null,"version_code": number | null,"version_id": string | null,"version_name": string | null
                   }
                   Relationships: [
 
@@ -309,7 +310,7 @@ isOneToOne: false
 { Args: { "p_actor_id": string,"p_version_id": string }; Returns: undefined
                            },
 "admin_publish_version_replacing_previous":
-{ Args: { "p_actor_id": string,"p_version_id": string }; Returns: string[]
+{ Args: { "p_actor_id": string,"p_version_id": string }; Returns: (string)[]
                            },
 "admin_record_external_action":
 { Args: { "p_action": string,"p_actor_id": string,"p_metadata"?: Json,"p_target_id": string,"p_target_type": string }; Returns: string
@@ -326,12 +327,18 @@ isOneToOne: false
 "admin_withdraw_version":
 { Args: { "p_actor_id": string,"p_version_id": string }; Returns: undefined
                            },
+"get_latest_app_release":
+{ Args: { "p_package_name": string }; Returns: {
+              "apk_path": string,"apk_size_bytes": number,"apk_url": string,"app_id": string,"changelog": string,"download_source": Database["public"]['Enums']["apk_download_source"],"package_name": string,"sha256": string,"version_code": number,"version_id": string,"version_name": string
+            }[]
+                           },
 "record_download":
 { Args: { "p_installation_id": string,"p_version_id": string }; Returns: boolean
                            },
 "search_catalog":
-{ Args: { "p_category_slug": string,"p_query": string,"p_sort": string }; Returns: {
-              "apk_path": string | null,
+{ Args: { "p_category_slug": string,"p_platform": string,"p_query": string,"p_sort": string }; Returns: {
+              "account_requirement": Database["public"]['Enums']["account_requirement"] | null,
+"apk_path": string | null,
 "apk_size_bytes": number | null,
 "apk_url": string | null,
 "app_id": string | null,
@@ -346,6 +353,8 @@ isOneToOne: false
 "sha256": string | null,
 "short_description": string | null,
 "slug": string | null,
+"supports_mobile": boolean | null,
+"supports_tv": boolean | null,
 "title": string | null,
 "version_changelog": string | null,
 "version_code": number | null,
@@ -360,7 +369,7 @@ isOneToOne: false
       } }
           }
           Enums: {
-            "apk_download_source": "storage"|"external","app_role": "admin","app_status": "active"|"archived","profile_status": "active"|"suspended","report_reason": "acilmiyor"|"link_bozuk"|"sahte_uygulama"|"diger","report_status": "open"|"resolved"|"dismissed","review_moderation_status": "visible"|"hidden","version_status": "draft"|"published"|"withdrawn"
+            "account_requirement": "none"|"optional"|"required","apk_download_source": "storage"|"external","app_role": "admin","app_status": "active"|"archived","profile_status": "active"|"suspended","report_reason": "acilmiyor"|"link_bozuk"|"sahte_uygulama"|"diger","report_status": "open"|"resolved"|"dismissed","review_moderation_status": "visible"|"hidden","version_status": "draft"|"published"|"withdrawn"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -480,7 +489,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "apk_download_source": ["storage", "external"],"app_role": ["admin"],"app_status": ["active", "archived"],"profile_status": ["active", "suspended"],"report_reason": ["acilmiyor", "link_bozuk", "sahte_uygulama", "diger"],"report_status": ["open", "resolved", "dismissed"],"review_moderation_status": ["visible", "hidden"],"version_status": ["draft", "published", "withdrawn"]
+            "account_requirement": ["none", "optional", "required"],"apk_download_source": ["storage", "external"],"app_role": ["admin"],"app_status": ["active", "archived"],"profile_status": ["active", "suspended"],"report_reason": ["acilmiyor", "link_bozuk", "sahte_uygulama", "diger"],"report_status": ["open", "resolved", "dismissed"],"review_moderation_status": ["visible", "hidden"],"version_status": ["draft", "published", "withdrawn"]
           }
         }
 } as const
