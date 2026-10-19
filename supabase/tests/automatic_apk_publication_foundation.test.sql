@@ -1,6 +1,6 @@
 begin;
 
-select plan(41);
+select plan(42);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -300,6 +300,11 @@ select lives_ok(
       'c0000000-0000-4000-8000-000000000001',
       'asset.cleanup_pending', 'asset', 'c5000000-0000-4000-8000-000000000005',
       '{"bucket":"apks","path":"apps/c2000000-0000-4000-8000-000000000001/versions/c3000000-0000-4000-8000-000000000002.apk","operation_id":"c5000000-0000-4000-8000-000000000005"}'
+    );
+    select public.admin_record_external_action(
+      'c0000000-0000-4000-8000-000000000001',
+      'version.draft', 'version', 'c3000000-0000-4000-8000-000000000007',
+      '{"supports_mobile":false,"supports_tv":true,"account_requirement":"required","raw_error":"secret"}'
     )$$,
   'the required lifecycle audit actions accept their expected target types'
 );
@@ -394,6 +399,14 @@ select results_eq(
       'c5000000-0000-4000-8000-000000000005'::text
     )$$,
   'cleanup audit retains canonical managed object identity'
+);
+
+select results_eq(
+  $$select metadata
+    from public.admin_audit_logs
+    where target_id = 'c3000000-0000-4000-8000-000000000007'$$,
+  $$values ('{"supports_mobile":false,"supports_tv":true,"account_requirement":"required"}'::jsonb)$$,
+  'release audit retains only validated platform and account metadata'
 );
 
 select lives_ok(

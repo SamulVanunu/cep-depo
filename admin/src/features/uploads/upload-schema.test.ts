@@ -19,6 +19,9 @@ const common = {
   changelog: 'Release',
   size: 1024,
   sha256: 'a'.repeat(64),
+  supportsMobile: true,
+  supportsTv: false,
+  accountRequirement: 'none' as const,
 };
 
 describe('APK draft schemas', () => {
@@ -91,6 +94,42 @@ describe('APK draft schemas', () => {
       operationId,
       fileName: 'release.apk',
       apkUrl: 'https://downloads.example.com/release.apk',
+    }).success).toBe(false);
+  });
+
+  it('rejects drafts with no supported platform', () => {
+    expect(storageDraftInputSchema.safeParse({
+      ...common,
+      supportsMobile: false,
+      supportsTv: false,
+      source: 'storage',
+      operationId,
+    }).success).toBe(false);
+  });
+
+  it('accepts both platforms and each account requirement', () => {
+    expect(storageDraftInputSchema.parse({
+      ...common,
+      supportsMobile: true,
+      supportsTv: true,
+      accountRequirement: 'required',
+      source: 'storage',
+      operationId,
+    })).toMatchObject({ supportsMobile: true, supportsTv: true, accountRequirement: 'required' });
+  });
+
+  it('rejects arbitrary metadata values and extra fields', () => {
+    expect(storageDraftInputSchema.safeParse({
+      ...common,
+      accountRequirement: 'admin',
+      source: 'storage',
+      operationId,
+    }).success).toBe(false);
+    expect(storageDraftInputSchema.safeParse({
+      ...common,
+      source: 'storage',
+      operationId,
+      unexpected: true,
     }).success).toBe(false);
   });
 

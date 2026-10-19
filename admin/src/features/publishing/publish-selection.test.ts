@@ -11,6 +11,7 @@ const apps: readonly PublishAppOption[] = [
     status: 'active',
     iconPath: null,
     latestVersionCode: 7,
+    latestReleaseMetadata: null,
   },
 ];
 

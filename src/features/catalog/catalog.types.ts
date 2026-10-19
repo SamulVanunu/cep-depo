@@ -8,6 +8,9 @@ export type ApkSource =
   | Readonly<{ kind: 'storage'; path: string }>
   | Readonly<{ kind: 'external'; url: string }>;
 
+export type PlatformFilter = 'all' | 'mobile' | 'tv';
+export type AccountRequirement = 'none' | 'optional' | 'required';
+
 export type CatalogVersion = Readonly<{
   id: string;
   name: string;
@@ -17,6 +20,9 @@ export type CatalogVersion = Readonly<{
   apkSizeBytes: number;
   sha256: string;
   publishedAt: string;
+  supportsMobile: boolean;
+  supportsTv: boolean;
+  accountRequirement: AccountRequirement;
 }>;
 
 export type CatalogCard = Readonly<{
@@ -49,4 +55,5 @@ export type CatalogFilters = Readonly<{
   query: string;
   categorySlug: string | null;
   sort: 'popular' | 'newest';
+  platform: PlatformFilter;
 }>;

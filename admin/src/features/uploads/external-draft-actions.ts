@@ -26,6 +26,9 @@ type ExternalDraftInsert = Readonly<{
   apkUrl: string;
   size: number;
   sha256: string;
+  supportsMobile: boolean;
+  supportsTv: boolean;
+  accountRequirement: 'none' | 'optional' | 'required';
 }>;
 
 type AuditInput = Readonly<{
@@ -37,6 +40,9 @@ type AuditInput = Readonly<{
     download_source: 'external';
     hostname: string;
     version_code: number;
+    supports_mobile: boolean;
+    supports_tv: boolean;
+    account_requirement: 'none' | 'optional' | 'required';
   }>;
 }>;
 
@@ -91,6 +97,9 @@ function defaultDependencies(): ExternalDraftActionDependencies {
         apk_url: input.apkUrl,
         apk_size_bytes: input.size,
         sha256: input.sha256,
+        supports_mobile: input.supportsMobile,
+        supports_tv: input.supportsTv,
+        account_requirement: input.accountRequirement,
         status: 'draft',
         created_by: input.actorId,
       }).select('id').single();
@@ -136,6 +145,9 @@ export async function createExternalDraft(
       apkUrl: parsedUrl.url,
       size: input.size,
       sha256: input.sha256,
+      supportsMobile: input.supportsMobile,
+      supportsTv: input.supportsTv,
+      accountRequirement: input.accountRequirement,
     });
     if (created.error) throw created.error;
     if (!created.data) throw new ActionException('INTERNAL');
@@ -148,6 +160,9 @@ export async function createExternalDraft(
         download_source: 'external',
         hostname: parsedUrl.hostname,
         version_code: input.versionCode,
+        supports_mobile: input.supportsMobile,
+        supports_tv: input.supportsTv,
+        account_requirement: input.accountRequirement,
       },
     });
     if (audit.error) throw new ActionException('TEMPORARY');

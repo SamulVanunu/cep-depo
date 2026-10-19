@@ -1,5 +1,6 @@
 import type { Database } from '../../types/database.types';
 import type {
+  AccountRequirement,
   ApkSource,
   CatalogApp,
   CatalogCard,
@@ -31,6 +32,9 @@ export type CatalogAppRow = {
     apk_size_bytes: number;
     sha256: string;
     published_at: string;
+    supports_mobile: boolean;
+    supports_tv: boolean;
+    account_requirement: AccountRequirement;
   }[];
   screenshots: {
     id: string;
@@ -63,6 +67,18 @@ function positiveInteger(value: number | null | undefined): number {
   return value;
 }
 
+function requiredBoolean(value: boolean | null | undefined): boolean {
+  if (typeof value !== 'boolean') throw new Error(INVALID_CATALOG_DATA);
+  return value;
+}
+
+function mapAccountRequirement(value: string | null | undefined): AccountRequirement {
+  if (value !== 'none' && value !== 'optional' && value !== 'required') {
+    throw new Error(INVALID_CATALOG_DATA);
+  }
+  return value;
+}
+
 function mapCategory(row: { id: string; slug: string; name: string }): Category {
   return Object.freeze({
     id: requiredString(row.id),
@@ -82,6 +98,9 @@ function mapVersion(row: {
   apk_size_bytes: number | null;
   sha256: string | null;
   published_at: string | null;
+  supports_mobile: boolean | null;
+  supports_tv: boolean | null;
+  account_requirement: AccountRequirement | null;
 }): CatalogVersion {
   let apkSource: ApkSource;
   if (row.download_source === 'storage' && row.apk_path && row.apk_url === null) {
@@ -100,6 +119,9 @@ function mapVersion(row: {
     apkSizeBytes: positiveInteger(row.apk_size_bytes),
     sha256: requiredString(row.sha256),
     publishedAt: requiredString(row.published_at),
+    supportsMobile: requiredBoolean(row.supports_mobile),
+    supportsTv: requiredBoolean(row.supports_tv),
+    accountRequirement: mapAccountRequirement(row.account_requirement),
   });
 }
 
@@ -120,6 +142,9 @@ export function mapCatalogCard(row: CatalogCardRow): CatalogCard {
     apk_size_bytes: row.apk_size_bytes,
     sha256: row.sha256,
     published_at: row.published_at,
+    supports_mobile: row.supports_mobile,
+    supports_tv: row.supports_tv,
+    account_requirement: row.account_requirement,
   });
 
   if (typeof row.featured !== 'boolean') {

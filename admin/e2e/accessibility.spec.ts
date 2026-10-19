@@ -50,6 +50,10 @@ test('publish wizard announces steps, focuses errors and supports keyboard publi
     await page.getByRole('button', { name: 'APK adımına devam et' }).focus();
     await page.keyboard.press('Enter');
     await expect(steps.locator('[aria-current="step"]')).toContainText('APK');
+    await expect(page.getByRole('group', { name: 'Desteklenen cihazlar' })).toBeVisible();
+    await expect(page.getByLabel('Mobil')).toBeChecked();
+    await expect(page.getByLabel('TV')).not.toBeChecked();
+    await expect(page.getByLabel('Hesap gereksinimi')).toHaveValue('none');
     await expect(page.getByLabel('APK dosyası', { exact: true })).toBeVisible();
     await page.getByLabel('APK dosyası', { exact: true }).setInputFiles(apk);
     await expect(page.getByRole('region', { name: 'APK manifest özeti' })).toContainText(packageName);

@@ -36,6 +36,9 @@ export type UploadActionDependencies = Readonly<{
     canonicalPath: string;
     size: number;
     sha256: string;
+    supportsMobile: boolean;
+    supportsTv: boolean;
+    accountRequirement: 'none' | 'optional' | 'required';
   }>): Promise<{ data: Readonly<{ id: string }> | null; error: unknown | null }>;
   recordAudit(input: Readonly<Record<string, unknown>>): Promise<{ error: unknown | null }>;
 }>;
@@ -110,6 +113,9 @@ export async function finalizeUpload(
       canonicalPath,
       size: input.size,
       sha256: input.sha256,
+      supportsMobile: input.supportsMobile,
+      supportsTv: input.supportsTv,
+      accountRequirement: input.accountRequirement,
     });
     if (created.error) throw created.error;
     if (!created.data) throw new ActionException('INTERNAL');
@@ -118,7 +124,13 @@ export async function finalizeUpload(
       action: 'version.draft',
       targetType: 'version',
       targetId: created.data.id,
-      metadata: { path: draftPath, version_code: input.versionCode },
+      metadata: {
+        path: draftPath,
+        version_code: input.versionCode,
+        supports_mobile: input.supportsMobile,
+        supports_tv: input.supportsTv,
+        account_requirement: input.accountRequirement,
+      },
     });
     if (audit.error) throw new ActionException('TEMPORARY');
     return { ok: true, data: { id: created.data.id, status: 'draft' } };
@@ -192,6 +204,9 @@ function defaultDependencies(): UploadActionDependencies {
         apk_path: input.canonicalPath,
         apk_size_bytes: input.size,
         sha256: input.sha256,
+        supports_mobile: input.supportsMobile,
+        supports_tv: input.supportsTv,
+        account_requirement: input.accountRequirement,
         status: 'draft',
         created_by: input.actorId,
       }).select('id').single();

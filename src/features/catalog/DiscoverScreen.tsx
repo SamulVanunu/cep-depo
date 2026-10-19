@@ -34,6 +34,7 @@ export function DiscoverScreen() {
     query: filters.debouncedQuery,
     categorySlug: filters.categorySlug,
     sort: filters.sort,
+    platform: filters.platform,
   });
   const apps = appsQuery.data ?? emptyApps;
   const categories = categoriesQuery.data ?? [];
@@ -95,6 +96,25 @@ export function DiscoverScreen() {
         ))}
       </ScrollView>
 
+      <View accessibilityLabel="Platform filtresi" style={styles.filterRow}>
+        {(['all', 'mobile', 'tv'] as const).map(platform => {
+          const selected = filters.platform === platform;
+          const label = platform === 'all' ? 'Tümü' : platform === 'mobile' ? 'Mobil' : 'TV';
+          return (
+            <Pressable
+              accessibilityLabel={`${label} platformu`}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              key={platform}
+              onPress={() => filters.setPlatform(platform)}
+              style={[styles.filterButton, selected && styles.filterButtonSelected]}
+            >
+              <AppText tone={selected ? 'primary' : 'muted'} variant="label">{label}</AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <View accessibilityLabel="Katalog sıralaması" style={styles.sortRow}>
         {(['popular', 'newest'] as const).map(sort => {
           const selected = filters.sort === sort;
@@ -130,7 +150,9 @@ export function DiscoverScreen() {
 
   const isPending = appsQuery.isPending || categoriesQuery.isPending;
   const isError = appsQuery.isError || categoriesQuery.isError;
-  const hasActiveFilter = filters.query.trim().length > 0 || filters.categorySlug !== null;
+  const hasActiveFilter = filters.query.trim().length > 0
+    || filters.categorySlug !== null
+    || filters.platform !== 'all';
 
   if (isPending) {
     return <SafeAreaView style={styles.screen}><ScreenState kind="loading" title="Katalog yükleniyor" /></SafeAreaView>;
@@ -207,6 +229,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   categories: { paddingVertical: spacing.lg },
+  filterRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  filterButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radii.pill, backgroundColor: colors.surface },
+  filterButtonSelected: { backgroundColor: colors.accent },
   sortRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl },
   sortButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   sortButtonSelected: { borderBottomColor: colors.accent },

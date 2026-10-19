@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(17);
 
 select is(
   (select supports_mobile from public.app_versions where id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'),
@@ -35,6 +35,11 @@ select throws_ok(
   '22023',
   null,
   'search rejects an invalid platform'
+);
+
+select lives_ok(
+  $$select * from public.search_catalog('', null, 'popular')$$,
+  'legacy clients may omit the platform argument'
 );
 
 update public.app_versions

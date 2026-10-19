@@ -45,7 +45,7 @@ describe('ApkDownloadPanel', () => {
   it('shows progress and cancellation while downloading inside the app', async () => {
     render(<ApkDownloadPanel action="download" dependencies={dependencies()} input={input} />);
 
-    fireEvent.press(screen.getByRole('button', { name: 'APK İNDİR' }));
+    fireEvent.press(screen.getByRole('button', { name: 'TELEFONA KUR' }));
 
     await screen.findByText('%50 · 0.0 / 0.0 MB');
     expect(screen.getByRole('progressbar')).toHaveAccessibilityValue({ min: 0, max: 100, now: 50, text: '%50' });
@@ -62,16 +62,16 @@ describe('ApkDownloadPanel', () => {
     });
     render(<ApkDownloadPanel action="download" dependencies={deps} input={input} />);
 
-    fireEvent.press(screen.getByRole('button', { name: 'APK İNDİR' }));
+    fireEvent.press(screen.getByRole('button', { name: 'TELEFONA KUR' }));
     fireEvent.press(await screen.findByRole('button', { name: 'İptal' }));
 
     expect(screen.getByRole('alert')).toHaveTextContent('İndirme iptal edildi. Kısmi dosya temizleniyor.');
     expect(screen.queryByRole('button', { name: 'İptal' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'APK İNDİR' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'TELEFONA KUR' })).toBeNull();
 
     await act(async () => download.reject(new Error('native cancellation settled')));
 
-    expect(await screen.findByRole('button', { name: 'APK İNDİR' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'TELEFONA KUR' })).toBeTruthy();
   });
 
   it('shows a re-install action after download and automatic installer launch', async () => {
@@ -83,7 +83,7 @@ describe('ApkDownloadPanel', () => {
     });
     render(<ApkDownloadPanel action="update" dependencies={deps} input={input} />);
 
-    fireEvent.press(screen.getByRole('button', { name: 'GÜNCELLE' }));
+    fireEvent.press(screen.getByRole('button', { name: 'TELEFONDA GÜNCELLE' }));
 
     await waitFor(() => expect(deps.openInstaller).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole('button', { name: 'TEKRAR KUR' })).toBeTruthy();

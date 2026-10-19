@@ -7,6 +7,7 @@ export function useCatalogFilters() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [categorySlug, setCategorySlug] = useState<string | null>(null);
   const [sort, setSort] = useState<CatalogFilters['sort']>('popular');
+  const [platform, setPlatform] = useState<CatalogFilters['platform']>('all');
 
   useEffect(() => {
     if (query === debouncedQuery) return;
@@ -22,5 +23,7 @@ export function useCatalogFilters() {
     setCategorySlug,
     sort,
     setSort,
+    platform,
+    setPlatform,
   } as const;
 }

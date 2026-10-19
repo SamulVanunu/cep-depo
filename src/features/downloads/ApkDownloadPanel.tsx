@@ -81,7 +81,7 @@ export function ApkDownloadPanel({
   return (
     <View style={styles.stack}>
       <Button
-        label={action === 'update' ? 'GÜNCELLE' : 'APK İNDİR'}
+        label={action === 'update' ? 'TELEFONDA GÜNCELLE' : 'TELEFONA KUR'}
         onPress={() => void download.start()}
       />
       <AppText style={styles.centered} tone="subtle" variant="label">

@@ -18,12 +18,12 @@ export function Button({ label, loading = false, disabled = false, variant = 'pr
       accessibilityRole="button"
       accessibilityState={{ busy: loading, disabled: isDisabled }}
       disabled={isDisabled}
-      style={({ pressed }) => [
+      style={state => [
         styles.base,
         styles[variant],
-        pressed && !isDisabled && styles.pressed,
+        state.pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
-        typeof style === 'function' ? style({ pressed }) : style,
+        typeof style === 'function' ? style(state) : style,
       ]}
     >
       {loading ? <ActivityIndicator color={variant === 'primary' ? colors.background : colors.accent} /> : <AppText tone="accent" style={variant === 'primary' ? styles.primaryLabel : undefined}>{label}</AppText>}

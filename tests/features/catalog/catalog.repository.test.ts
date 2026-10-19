@@ -7,6 +7,7 @@ const cardRow: CatalogCardRow = {
     'apps/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1/versions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2.apk',
   apk_size_bytes: 24_000_000,
   apk_url: null,
+  account_requirement: 'none',
   app_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
   category_id: '22222222-2222-4222-8222-222222222222',
   category_name: 'Eğlence',
@@ -20,6 +21,8 @@ const cardRow: CatalogCardRow = {
   short_description: 'Canlı yayın listelerini sade bir arayüzde aç.',
   slug: 'cep-iptv',
   title: 'Cep İptv',
+  supports_mobile: true,
+  supports_tv: false,
   version_changelog: 'Açılış performansı ve oynatma düzeltmeleri.',
   version_code: 12,
   version_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
@@ -43,8 +46,8 @@ function createDetailQuery(result: { data: CatalogAppRow | null; error: unknown 
 describe('catalog repository', () => {
   it('builds stable keys from normalized catalog filters', () => {
     expect(
-      catalogKeys.apps({ query: '  IPTV ', categorySlug: ' eglence ', sort: 'newest' }),
-    ).toEqual(['catalog', 'apps', { query: 'IPTV', categorySlug: 'eglence', sort: 'newest' }]);
+      catalogKeys.apps({ query: '  IPTV ', categorySlug: ' eglence ', sort: 'newest', platform: 'tv' }),
+    ).toEqual(['catalog', 'apps', { query: 'IPTV', categorySlug: 'eglence', sort: 'newest', platform: 'tv' }]);
   });
 
   it('normalizes blank filters and delegates sorting to search_catalog', async () => {
@@ -55,14 +58,28 @@ describe('catalog repository', () => {
       query: '   ',
       categorySlug: null,
       sort: 'popular',
+      platform: 'all',
     });
 
     expect(rpc).toHaveBeenCalledWith('search_catalog', {
       p_query: '',
       p_category_slug: null,
       p_sort: 'popular',
+      p_platform: null,
     });
     expect(result.map(app => app.slug)).toEqual(['cep-iptv']);
+  });
+
+  it.each([
+    ['mobile', 'mobile'],
+    ['tv', 'tv'],
+  ] as const)('passes the %s platform filter to search_catalog', async (platform, expected) => {
+    const rpc = jest.fn().mockResolvedValue({ data: [cardRow], error: null });
+    const repository = createCatalogRepository({ rpc, from: jest.fn() } as never);
+
+    await repository.listApps({ query: '', categorySlug: null, sort: 'popular', platform });
+
+    expect(rpc).toHaveBeenCalledWith('search_catalog', expect.objectContaining({ p_platform: expected }));
   });
 
   it('returns null for a genuine no-row detail result', async () => {
@@ -75,6 +92,9 @@ describe('catalog repository', () => {
     await expect(repository.getAppBySlug('missing')).resolves.toBeNull();
     expect(query.select).toHaveBeenCalledWith(expect.stringContaining(
       'download_source, apk_path, apk_url',
+    ));
+    expect(query.select).toHaveBeenCalledWith(expect.stringContaining(
+      'supports_mobile, supports_tv, account_requirement',
     ));
     expect(query.order).toHaveBeenNthCalledWith(1, 'version_code', {
       ascending: false,

@@ -227,6 +227,25 @@ export function PublishWizard({
             <h2 id="publish-complete-heading" tabIndex={-1}>Yayın tamamlandı</h2>
             <p className="muted">{state.app.title} kataloğa başarıyla yayınlandı.</p>
           </div>
+          {state.review ? (
+            <section aria-label="Yayın metadata özeti" className="detail-list">
+              <div>
+                <dt>Desteklenen cihazlar</dt>
+                <dd>{[
+                  state.review.releaseMetadata.supportsMobile ? 'Mobil' : null,
+                  state.review.releaseMetadata.supportsTv ? 'TV' : null,
+                ].filter(Boolean).join(', ')}</dd>
+              </div>
+              <div>
+                <dt>Hesap gereksinimi</dt>
+                <dd>{{
+                  none: 'Gerekmez',
+                  optional: 'İsteğe bağlı',
+                  required: 'Zorunlu',
+                }[state.review.releaseMetadata.accountRequirement]}</dd>
+              </div>
+            </section>
+          ) : null}
           {cleanupPending ? (
             <p role="status">Yayın tamamlandı; bazı dosyalar temizleme bekliyor.</p>
           ) : null}

@@ -129,6 +129,7 @@ describe('AppStep', () => {
       status: 'active' as const,
       iconPath: 'apps/existing/icon.png',
       latestVersionCode: 7,
+      latestReleaseMetadata: null,
       isNew: false as const,
       operationId: null,
       initialAssets: null,

@@ -65,15 +65,19 @@ test('admin creates a complete app and automatically publishes manifest-derived 
     await expect(manifest).toContainText(packageName);
     await expect(manifest).toContainText('1.0-e2e');
     await expect(manifest).toContainText(String(versionCode));
+    await page.getByLabel('TV').check();
+    await page.getByLabel('Hesap gereksinimi').selectOption('required');
     await page.getByLabel('Değişiklik notları').fill('Yeni uygulama E2E yayını.');
     await expect(page.getByRole('button', { name: 'Yayınla', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: "APK'yı yükle ve yayınla" }).click();
     await expect(page.getByRole('heading', { name: 'Yayın tamamlandı' })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('region', { name: 'Yayın metadata özeti' })).toContainText('Mobil, TV');
+    await expect(page.getByRole('region', { name: 'Yayın metadata özeti' })).toContainText('Zorunlu');
 
     await expect.poll(async () => {
       const state = await serviceClient
         .from('apps')
-        .select('status, package_name, icon_path, categories(slug), app_screenshots(alt_text), app_versions(id, status, version_code, version_name, package_name)')
+        .select('status, package_name, icon_path, categories(slug), app_screenshots(alt_text), app_versions(id, status, version_code, version_name, package_name, supports_mobile, supports_tv, account_requirement)')
         .eq('id', appId!)
         .single();
       const version = state.data?.app_versions.find(item => item.version_code === versionCode);
@@ -87,6 +91,9 @@ test('admin creates a complete app and automatically publishes manifest-derived 
           status: version.status,
           packageName: version.package_name,
           versionName: version.version_name,
+          supportsMobile: version.supports_mobile,
+          supportsTv: version.supports_tv,
+          accountRequirement: version.account_requirement,
         },
       };
     }).toEqual({
@@ -95,7 +102,14 @@ test('admin creates a complete app and automatically publishes manifest-derived 
       icon: true,
       packageName,
       screenshotAlt: 'E2E uygulama ekranı',
-      version: { status: 'published', packageName, versionName: '1.0-e2e' },
+      version: {
+        status: 'published',
+        packageName,
+        versionName: '1.0-e2e',
+        supportsMobile: true,
+        supportsTv: true,
+        accountRequirement: 'required',
+      },
     });
 
     const versions = await serviceClient.from('app_versions').select('id').eq('app_id', appId!);

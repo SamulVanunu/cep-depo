@@ -17,7 +17,12 @@ import {
   type TusUploadHandle,
 } from '../uploads/tus-upload';
 import { createUploadIntentAction, finalizeUploadAction } from '../uploads/upload-actions';
-import { APK_MAX_BYTES, APK_MIME_TYPES } from '../uploads/upload-schema';
+import {
+  APK_MAX_BYTES,
+  APK_MIME_TYPES,
+  releaseMetadataSchema,
+  type ReleaseMetadataInput,
+} from '../uploads/upload-schema';
 import { parseApkManifest, type ParsedApkManifest } from '../uploads/apk-manifest';
 import type { PublishReview, SelectedPublishApp } from './publish-types';
 
@@ -91,6 +96,13 @@ export function ApkStep({
   const [parsingManifest, setParsingManifest] = useState(false);
   const [progress, setProgress] = useState<Progress>({ percent: 0, processed: 0, total: 0 });
   const [message, setMessage] = useState<string | null>(null);
+  const [releaseMetadata, setReleaseMetadata] = useState<ReleaseMetadataInput>(
+    app.latestReleaseMetadata ?? {
+      supportsMobile: true,
+      supportsTv: false,
+      accountRequirement: 'none',
+    },
+  );
   const headingRef = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +164,11 @@ export function ApkStep({
 
   async function run(form: HTMLFormElement) {
     if (activeRef.current) return;
+    const parsedReleaseMetadata = releaseMetadataSchema.safeParse(releaseMetadata);
+    if (!parsedReleaseMetadata.success) {
+      fail('En az bir platform seçilmelidir.');
+      return;
+    }
     const selectedFile = file;
     const fileError = validateFile(selectedFile, source);
     if (fileError) {
@@ -224,6 +241,7 @@ export function ApkStep({
           apkUrl: externalUrl.url,
           size: selectedFile.size,
           sha256: digest,
+          ...parsedReleaseMetadata.data,
         });
         if (!drafted.ok) {
           fail(drafted.error.message);
@@ -239,6 +257,7 @@ export function ApkStep({
           size: selectedFile.size,
           sha256: digest,
           changelog,
+          releaseMetadata: parsedReleaseMetadata.data,
           source: { kind: 'external', hostname: drafted.data.hostname },
         });
         return;
@@ -290,6 +309,7 @@ export function ApkStep({
         operationId: intent.data.operationId,
         size: selectedFile.size,
         sha256: digest,
+        ...parsedReleaseMetadata.data,
       });
       if (!finalized.ok) {
         fail(finalized.error.message);
@@ -306,6 +326,7 @@ export function ApkStep({
         size: selectedFile.size,
         sha256: digest,
         changelog,
+        releaseMetadata: parsedReleaseMetadata.data,
         source: { kind: 'storage' },
       });
     } catch (error) {
@@ -416,6 +437,49 @@ export function ApkStep({
             HTTPS APK linki kullan
           </label>
         </fieldset>
+        <fieldset disabled={active}>
+          <legend>Desteklenen cihazlar</legend>
+          <label>
+            <input
+              checked={releaseMetadata.supportsMobile}
+              name="supportsMobile"
+              onChange={event => {
+                const supportsMobile = event.currentTarget.checked;
+                setReleaseMetadata(current => ({ ...current, supportsMobile }));
+              }}
+              type="checkbox"
+            />
+            Mobil
+          </label>
+          <label>
+            <input
+              checked={releaseMetadata.supportsTv}
+              name="supportsTv"
+              onChange={event => {
+                const supportsTv = event.currentTarget.checked;
+                setReleaseMetadata(current => ({ ...current, supportsTv }));
+              }}
+              type="checkbox"
+            />
+            TV
+          </label>
+        </fieldset>
+        <label className="field">
+          <span>Hesap gereksinimi</span>
+          <select
+            disabled={active}
+            name="accountRequirement"
+            onChange={event => {
+              const accountRequirement = event.currentTarget.value as ReleaseMetadataInput['accountRequirement'];
+              setReleaseMetadata(current => ({ ...current, accountRequirement }));
+            }}
+            value={releaseMetadata.accountRequirement}
+          >
+            <option value="none">Gerekmez</option>
+            <option value="optional">İsteğe bağlı</option>
+            <option value="required">Zorunlu</option>
+          </select>
+        </label>
         {source === 'external' ? (
           <>
             <div className="muted">

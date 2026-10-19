@@ -91,7 +91,7 @@ export async function listPublishApps(): Promise<readonly PublishAppOption[]> {
   const client = getAdminClient(identity);
   const { data, error } = await client
     .from('apps')
-    .select('id, title, slug, status, icon_path, app_versions(version_code)')
+    .select('id, title, slug, status, icon_path, app_versions(version_code, status, supports_mobile, supports_tv, account_requirement)')
     .order('title');
   if (error) throw new ActionException('TEMPORARY');
   return mapPublishAppOptions(data ?? []);

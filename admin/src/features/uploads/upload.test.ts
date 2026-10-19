@@ -22,6 +22,9 @@ const finalizeInput = {
   operationId,
   size: 1024,
   sha256: 'a'.repeat(64),
+  supportsMobile: false,
+  supportsTv: true,
+  accountRequirement: 'optional' as const,
 };
 
 function dependencies(overrides: Partial<UploadActionDependencies> = {}): UploadActionDependencies {
@@ -43,6 +46,26 @@ describe('APK upload contracts', () => {
     const result = await finalizeUpload(finalizeInput, dependencies());
 
     expect(result).toMatchObject({ ok: true });
+    expect(dependencies().createDraft).not.toHaveBeenCalled();
+  });
+
+  it('persists release metadata in the Storage draft and audits only safe fields', async () => {
+    const deps = dependencies();
+    const result = await finalizeUpload(finalizeInput, deps);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(deps.createDraft).toHaveBeenCalledWith(expect.objectContaining({
+      supportsMobile: false,
+      supportsTv: true,
+      accountRequirement: 'optional',
+    }));
+    expect(deps.recordAudit).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({
+        supports_mobile: false,
+        supports_tv: true,
+        account_requirement: 'optional',
+      }),
+    }));
   });
 
   it('recognizes only server-generated orphan draft paths', () => {

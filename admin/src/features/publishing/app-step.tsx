@@ -153,6 +153,7 @@ export function AppStep({
         status: staged.status,
         iconPath,
         latestVersionCode: null,
+        latestReleaseMetadata: null,
         isNew: true,
         operationId: staged.operationId,
         initialAssets: { iconPath, screenshots: uploadedScreenshots },

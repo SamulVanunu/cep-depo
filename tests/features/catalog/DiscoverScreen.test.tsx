@@ -42,6 +42,9 @@ function card(title: string, slug: string, category = categories[0]): CatalogCar
       apkSizeBytes: 1,
       sha256: 'a'.repeat(64),
       publishedAt: '2026-10-01T00:00:00Z',
+      supportsMobile: true,
+      supportsTv: true,
+      accountRequirement: 'optional',
     },
   };
 }
@@ -121,8 +124,21 @@ describe('DiscoverScreen', () => {
     mockUseCatalogApps.mockReturnValue(queryResult({ data: [card('Cep IPTV', 'cep-iptv')] }));
     renderDiscover();
 
-    fireEvent.press(screen.getByLabelText('Cep IPTV, Eski, sürüm 1.2'));
+    fireEvent.press(screen.getByLabelText(
+      'Cep IPTV, Eski, sürüm 1.2, Mobil ve TV, Hesap isteğe bağlı',
+    ));
 
     expect(mockPush).toHaveBeenCalledWith('/apps/cep-iptv');
+  });
+
+  it('exposes accessible platform filters and sends the selected platform to the query', () => {
+    mockUseCatalogApps.mockReturnValue(queryResult({ data: [card('Cep IPTV', 'cep-iptv')] }));
+    renderDiscover();
+
+    expect(screen.getByRole('button', { name: 'Tümü platformu', selected: true })).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'TV platformu' }));
+
+    expect(screen.getByRole('button', { name: 'TV platformu', selected: true })).toBeTruthy();
+    expect(mockUseCatalogApps).toHaveBeenLastCalledWith(expect.objectContaining({ platform: 'tv' }));
   });
 });

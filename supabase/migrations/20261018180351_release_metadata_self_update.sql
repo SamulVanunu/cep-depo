@@ -8,6 +8,139 @@ alter table public.app_versions
 
 alter table public.app_versions validate constraint app_versions_platform_support_check;
 
+create or replace function public.admin_record_external_action(
+  p_actor_id uuid,
+  p_action text,
+  p_target_type text,
+  p_target_id text,
+  p_metadata jsonb default '{}'::jsonb
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  audit_id uuid;
+  safe_metadata jsonb;
+  expected_target_type text;
+  external_actions constant text[] = array[
+    'app.create', 'app.update', 'app.archive', 'app.delete',
+    'category.create', 'category.update',
+    'asset.upload', 'asset.cleanup_pending',
+    'screenshot.create', 'screenshot.update', 'screenshot.delete',
+    'version.draft', 'version.replace', 'upload.cleanup',
+    'user.delete', 'user.recovery_request'
+  ];
+begin
+  perform private.require_admin_actor(p_actor_id);
+
+  if not p_action = any (external_actions) then
+    raise exception using errcode = 'P0001', message = 'Geçersiz yönetim işlemi.';
+  end if;
+
+  expected_target_type = case
+    when p_action like 'app.%' then 'app'
+    when p_action like 'category.%' then 'category'
+    when p_action in ('asset.upload', 'asset.cleanup_pending') then 'asset'
+    when p_action like 'screenshot.%' then 'screenshot'
+    when p_action in ('version.draft', 'version.replace') then 'version'
+    when p_action = 'upload.cleanup' then 'upload'
+    when p_action like 'user.%' then 'user'
+  end;
+
+  if p_target_type is distinct from expected_target_type then
+    raise exception using errcode = 'P0001', message = 'İşlem ve hedef türü eşleşmiyor.';
+  end if;
+
+  if p_action in ('app.delete', 'version.replace', 'asset.cleanup_pending')
+    and p_target_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  then
+    raise exception using errcode = 'P0001', message = 'Geçersiz audit hedef kimliği.';
+  end if;
+
+  if jsonb_typeof(coalesce(p_metadata, '{}'::jsonb)) <> 'object' then
+    raise exception using errcode = 'P0001', message = 'Geçersiz audit metadata.';
+  end if;
+
+  if p_action = 'asset.cleanup_pending' and not coalesce((
+    jsonb_typeof(p_metadata->'bucket') = 'string'
+    and jsonb_typeof(p_metadata->'path') = 'string'
+    and jsonb_typeof(p_metadata->'operation_id') = 'string'
+    and p_metadata->>'operation_id' = p_target_id
+    and (
+      (
+        p_metadata->>'bucket' = 'apk-drafts'
+        and p_metadata->>'path' ~ '^operations/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/source\.apk$'
+      )
+      or (
+        p_metadata->>'bucket' = 'apks'
+        and p_metadata->>'path' ~ '^apps/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/versions/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.apk$'
+      )
+      or (
+        p_metadata->>'bucket' = 'app-assets'
+        and p_metadata->>'path' ~ '^apps/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/(icons|screenshots)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|webp)$'
+      )
+    )
+  ), false) then
+    raise exception using errcode = 'P0001', message = 'Geçersiz cleanup audit metadata.';
+  end if;
+
+  select coalesce(jsonb_object_agg(entry.key, entry.value), '{}'::jsonb)
+  into safe_metadata
+  from jsonb_each(coalesce(p_metadata, '{}'::jsonb)) as entry
+  where case
+    when entry.key in ('old_status', 'new_status', 'status') then
+      jsonb_typeof(entry.value) = 'string'
+      and entry.value #>> '{}' = any (array[
+        'active', 'archived', 'draft', 'published', 'withdrawn',
+        'visible', 'hidden', 'open', 'resolved', 'dismissed', 'suspended'
+      ])
+    when entry.key in ('version_code', 'old_version_code', 'new_version_code') then
+      jsonb_typeof(entry.value) = 'number'
+      and entry.value #>> '{}' ~ '^[0-9]+$'
+      and (entry.value #>> '{}')::numeric between 1 and 2147483647
+    when entry.key = 'bucket' then
+      jsonb_typeof(entry.value) = 'string'
+      and entry.value #>> '{}' = any (array['apk-drafts', 'apks', 'app-assets'])
+    when entry.key = 'path' then
+      jsonb_typeof(entry.value) = 'string'
+      and (
+        entry.value #>> '{}' ~ '^operations/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/source\.apk$'
+        or entry.value #>> '{}' ~ '^apps/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/versions/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.apk$'
+        or entry.value #>> '{}' ~ '^apps/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/(icons|screenshots)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|webp)$'
+      )
+    when entry.key = 'operation_id' then
+      jsonb_typeof(entry.value) = 'string'
+      and entry.value #>> '{}' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    when entry.key = 'partial' then
+      jsonb_typeof(entry.value) = 'boolean'
+    when entry.key = 'download_source' then
+      jsonb_typeof(entry.value) = 'string'
+      and entry.value #>> '{}' in ('storage', 'external')
+    when entry.key = 'hostname' then
+      jsonb_typeof(entry.value) = 'string'
+      and char_length(entry.value #>> '{}') between 1 and 253
+      and (
+        entry.value #>> '{}' ~ '^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'
+        or entry.value #>> '{}' ~ '^[0-9A-Fa-f]*:[0-9A-Fa-f:]+$'
+      )
+    when entry.key in ('supports_mobile', 'supports_tv') then
+      jsonb_typeof(entry.value) = 'boolean'
+    when entry.key = 'account_requirement' then
+      jsonb_typeof(entry.value) = 'string'
+      and entry.value #>> '{}' in ('none', 'optional', 'required')
+    else false
+  end;
+
+  insert into public.admin_audit_logs (actor_id, action, target_type, target_id, metadata)
+  values (p_actor_id, p_action, p_target_type, p_target_id, safe_metadata)
+  returning id into audit_id;
+
+  return audit_id;
+end;
+$$;
+
 -- Package identity is the unique source key for self-update releases. Fail before
 -- creating the index so an unsafe production state gets an actionable message.
 do $$
@@ -79,7 +212,7 @@ create function public.search_catalog(
   p_query text,
   p_category_slug text,
   p_sort text,
-  p_platform text
+  p_platform text default null
 )
 returns setof public.catalog_app_cards
 language plpgsql

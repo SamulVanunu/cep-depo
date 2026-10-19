@@ -10,6 +10,7 @@ const cardRow: CatalogCardRow = {
     'apps/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1/versions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2.apk',
   apk_size_bytes: 24_000_000,
   apk_url: null,
+  account_requirement: 'optional',
   app_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
   category_id: '22222222-2222-4222-8222-222222222222',
   category_name: 'Eğlence',
@@ -23,6 +24,8 @@ const cardRow: CatalogCardRow = {
   short_description: 'Canlı yayın listelerini sade bir arayüzde aç.',
   slug: 'cep-iptv',
   title: 'Cep İptv',
+  supports_mobile: true,
+  supports_tv: true,
   version_changelog: 'Açılış performansı ve oynatma düzeltmeleri.',
   version_code: 12,
   version_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
@@ -40,6 +43,9 @@ describe('catalog mapper', () => {
         code: 12,
         name: '1.2',
         apkSource: { kind: 'storage', path: cardRow.apk_path },
+        supportsMobile: true,
+        supportsTv: true,
+        accountRequirement: 'optional',
       },
     });
     expect(Object.isFrozen(result)).toBe(true);
@@ -77,6 +83,17 @@ describe('catalog mapper', () => {
     );
   });
 
+  it.each([
+    { supports_mobile: null },
+    { supports_tv: null },
+    { account_requirement: null },
+    { account_requirement: 'unknown' as never },
+  ])('rejects missing or invalid release metadata', patch => {
+    expect(() => mapCatalogCard({ ...cardRow, ...patch })).toThrow(
+      'Katalog verisi eksik veya geçersiz.',
+    );
+  });
+
   it('maps detail versions and screenshots in repository order', () => {
     const detailRow: CatalogAppRow = {
       id: cardRow.app_id!,
@@ -104,6 +121,9 @@ describe('catalog mapper', () => {
           apk_size_bytes: cardRow.apk_size_bytes!,
           sha256: cardRow.sha256!,
           published_at: cardRow.published_at!,
+          supports_mobile: true,
+          supports_tv: true,
+          account_requirement: 'optional',
         },
       ],
       screenshots: [

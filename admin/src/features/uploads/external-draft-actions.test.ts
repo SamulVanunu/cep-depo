@@ -20,6 +20,9 @@ const raw = {
   apkUrl: 'HTTPS://DOWNLOADS.EXAMPLE.COM/releases/app.apk',
   size: 51_000_000,
   sha256: 'a'.repeat(64),
+  supportsMobile: true,
+  supportsTv: true,
+  accountRequirement: 'required' as const,
 };
 
 function dependencies(
@@ -81,6 +84,9 @@ describe('createExternalDraft', () => {
       apkUrl: 'https://downloads.example.com/releases/app.apk',
       size: 51_000_000,
       sha256: 'a'.repeat(64),
+      supportsMobile: true,
+      supportsTv: true,
+      accountRequirement: 'required',
     });
     expect(recordAudit).toHaveBeenCalledWith({
       actorId,
@@ -91,6 +97,9 @@ describe('createExternalDraft', () => {
         download_source: 'external',
         hostname: 'downloads.example.com',
         version_code: 12,
+        supports_mobile: true,
+        supports_tv: true,
+        account_requirement: 'required',
       },
     });
     expect(JSON.stringify(recordAudit.mock.calls)).not.toContain('/releases/app.apk');

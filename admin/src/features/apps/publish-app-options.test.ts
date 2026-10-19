@@ -11,7 +11,11 @@ describe('publish app options', () => {
         slug: 'bir-uygulama',
         status: 'active',
         icon_path: 'apps/a100/icon.png',
-        app_versions: [{ version_code: 3 }, { version_code: 9 }, { version_code: 4 }],
+        app_versions: [
+          { version_code: 3, status: 'published', supports_mobile: true, supports_tv: false, account_requirement: 'none' },
+          { version_code: 9, status: 'draft', supports_mobile: true, supports_tv: true, account_requirement: 'required' },
+          { version_code: 4, status: 'published', supports_mobile: false, supports_tv: true, account_requirement: 'optional' },
+        ],
       },
       {
         id: 'a1000000-0000-4000-8000-000000000002',
@@ -29,6 +33,11 @@ describe('publish app options', () => {
         status: 'active',
         iconPath: 'apps/a100/icon.png',
         latestVersionCode: 9,
+        latestReleaseMetadata: {
+          supportsMobile: false,
+          supportsTv: true,
+          accountRequirement: 'optional',
+        },
       },
       {
         id: 'a1000000-0000-4000-8000-000000000002',
@@ -37,6 +46,7 @@ describe('publish app options', () => {
         status: 'archived',
         iconPath: null,
         latestVersionCode: null,
+        latestReleaseMetadata: null,
       },
     ]);
   });

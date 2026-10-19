@@ -14,6 +14,17 @@ const packageNameSchema = z.string()
   .max(255)
   .regex(/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$/);
 
+export const releaseMetadataSchema = z.object({
+  supportsMobile: z.boolean(),
+  supportsTv: z.boolean(),
+  accountRequirement: z.enum(['none', 'optional', 'required']),
+}).refine(metadata => metadata.supportsMobile || metadata.supportsTv, {
+  message: 'En az bir platform seçilmelidir.',
+  path: ['supportsMobile'],
+});
+
+export type ReleaseMetadataInput = z.infer<typeof releaseMetadataSchema>;
+
 const draftMetadataShape = {
   appId: z.string().uuid(),
   packageName: packageNameSchema,
@@ -26,17 +37,25 @@ const draftMetadataShape = {
 
 export const storageDraftInputSchema = z.object({
   ...draftMetadataShape,
+  ...releaseMetadataSchema.shape,
   size: z.number().int().positive().max(HOSTED_STORAGE_MAX_BYTES),
   source: z.literal('storage'),
   operationId: z.string().uuid(),
-}).strict();
+}).strict().refine(metadata => metadata.supportsMobile || metadata.supportsTv, {
+  message: 'En az bir platform seçilmelidir.',
+  path: ['supportsMobile'],
+});
 
 export const externalDraftInputSchema = z.object({
   ...draftMetadataShape,
+  ...releaseMetadataSchema.shape,
   source: z.literal('external'),
   fileName: z.string().trim().toLowerCase().refine(name => name.endsWith('.apk')),
   apkUrl: z.string().trim().min(1).max(2048),
-}).strict();
+}).strict().refine(metadata => metadata.supportsMobile || metadata.supportsTv, {
+  message: 'En az bir platform seçilmelidir.',
+  path: ['supportsMobile'],
+});
 
 export const apkDraftInputSchema = z.discriminatedUnion('source', [
   storageDraftInputSchema,

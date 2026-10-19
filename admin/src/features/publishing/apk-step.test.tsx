@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SelectedPublishApp } from './publish-types';
@@ -13,6 +14,11 @@ const app: SelectedPublishApp = {
   status: 'active',
   iconPath: null,
   latestVersionCode: 7,
+  latestReleaseMetadata: {
+    supportsMobile: false,
+    supportsTv: true,
+    accountRequirement: 'optional',
+  },
   isNew: false,
 };
 
@@ -40,5 +46,92 @@ describe('ApkStep', () => {
   it('renders the single automatic publication button', () => {
     render(<ApkStep app={app} dependencies={dependencies()} onComplete={vi.fn()} />);
     expect(screen.getByRole('button', { name: "APK'yı yükle ve yayınla" })).toBeVisible();
+  });
+
+  it('defaults new apps to Mobile and existing apps to their latest published metadata', () => {
+    const { unmount } = render(
+      <ApkStep
+        app={{ ...app, isNew: true, latestReleaseMetadata: null }}
+        dependencies={dependencies()}
+        onComplete={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Desteklenen cihazlar' })).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: 'Mobil' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'TV' })).not.toBeChecked();
+    expect(screen.getByRole('combobox', { name: 'Hesap gereksinimi' })).toHaveValue('none');
+
+    unmount();
+    render(<ApkStep app={app} dependencies={dependencies()} onComplete={vi.fn()} />);
+    expect(screen.getByRole('checkbox', { name: 'Mobil' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'TV' })).toBeChecked();
+    expect(screen.getByRole('combobox', { name: 'Hesap gereksinimi' })).toHaveValue('optional');
+  });
+
+  it('rejects an APK draft when neither platform is selected', async () => {
+    const user = userEvent.setup();
+    const deps = dependencies();
+    render(<ApkStep app={app} dependencies={deps} onComplete={vi.fn()} />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'TV' }));
+    await user.click(screen.getByRole('button', { name: "APK'yı yükle ve yayınla" }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('En az bir platform seçilmelidir.');
+    expect(deps.finalizeUpload).not.toHaveBeenCalled();
+    expect(deps.createExternalDraft).not.toHaveBeenCalled();
+  });
+
+  it('sends release metadata through Storage drafts and the publication review', async () => {
+    const user = userEvent.setup();
+    const deps = dependencies();
+    const onComplete = vi.fn();
+    render(<ApkStep app={app} dependencies={deps} onComplete={onComplete} />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Mobil' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Hesap gereksinimi' }), 'required');
+    await user.upload(
+      screen.getByLabelText('APK dosyası'),
+      new File(['PK valid'], 'release.apk', { type: 'application/vnd.android.package-archive' }),
+    );
+    await screen.findByRole('region', { name: 'APK manifest özeti' });
+    await user.click(screen.getByRole('button', { name: "APK'yı yükle ve yayınla" }));
+
+    await waitFor(() => expect(deps.finalizeUpload).toHaveBeenCalledWith(expect.objectContaining({
+      supportsMobile: true,
+      supportsTv: true,
+      accountRequirement: 'required',
+    })));
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
+      releaseMetadata: {
+        supportsMobile: true,
+        supportsTv: true,
+        accountRequirement: 'required',
+      },
+    }));
+  });
+
+  it('sends release metadata through external drafts', async () => {
+    const user = userEvent.setup();
+    const deps = dependencies();
+    render(<ApkStep app={app} dependencies={deps} onComplete={vi.fn()} />);
+
+    await user.click(screen.getByRole('radio', { name: 'HTTPS APK linki kullan' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Mobil' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Hesap gereksinimi' }), 'none');
+    await user.upload(
+      screen.getByLabelText('1. Aynı APK’nın yerel kopyası'),
+      new File(['PK valid'], 'release.apk', { type: 'application/vnd.android.package-archive' }),
+    );
+    await user.type(
+      screen.getByLabelText('2. Doğrudan HTTPS APK bağlantısı'),
+      'https://downloads.example.com/release.apk',
+    );
+    await user.click(screen.getByRole('button', { name: "APK'yı yükle ve yayınla" }));
+
+    await waitFor(() => expect(deps.createExternalDraft).toHaveBeenCalledWith(expect.objectContaining({
+      supportsMobile: true,
+      supportsTv: true,
+      accountRequirement: 'none',
+    })));
   });
 });

@@ -25,6 +25,7 @@ type AppDetailScreenProps = {
   slug: string;
   resolveAssetUrl?: (path: string) => string;
   renderDownloadAction?: (app: CatalogApp) => ReactNode;
+  renderTvInstallAction?: (app: CatalogApp) => ReactNode;
 };
 
 function formatFileSize(bytes: number): string {
@@ -35,6 +36,7 @@ export function AppDetailScreen({
   slug,
   resolveAssetUrl = getPublicAssetUrl,
   renderDownloadAction,
+  renderTvInstallAction,
 }: AppDetailScreenProps) {
   const router = useRouter();
   const normalizedSlug = slug.trim();
@@ -75,6 +77,11 @@ export function AppDetailScreen({
     app.currentVersion.code,
     downloadHistory.downloadedVersion,
   );
+  const accountLabel = {
+    none: 'Hesap gerekmez',
+    optional: 'Hesap isteğe bağlı',
+    required: 'Hesap zorunlu',
+  }[app.currentVersion.accountRequirement];
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -99,26 +106,43 @@ export function AppDetailScreen({
             <AppText tone="subtle" variant="label">
               {formatFileSize(app.currentVersion.apkSizeBytes)}
             </AppText>
+            <AppText tone="subtle" variant="label">{accountLabel}</AppText>
           </View>
         </View>
 
         <View style={styles.download}>
-          {renderDownloadAction ? (
-            renderDownloadAction(app)
-          ) : (
-            <ApkDownloadPanel
-              action={downloadAction}
-              input={{
-                appId: app.id,
-                versionId: app.currentVersion.id,
-                versionCode: app.currentVersion.code,
-                apkSource: app.currentVersion.apkSource,
-                apkSizeBytes: app.currentVersion.apkSizeBytes,
-                sha256: app.currentVersion.sha256,
-              }}
-              onInstallerOpened={downloadHistory.refresh}
-            />
-          )}
+          {app.currentVersion.supportsMobile ? (
+            <View style={styles.actionStack}>
+              {renderDownloadAction ? (
+                renderDownloadAction(app)
+              ) : (
+                <ApkDownloadPanel
+                  action={downloadAction}
+                  input={{
+                    appId: app.id,
+                    versionId: app.currentVersion.id,
+                    versionCode: app.currentVersion.code,
+                    apkSource: app.currentVersion.apkSource,
+                    apkSizeBytes: app.currentVersion.apkSizeBytes,
+                    sha256: app.currentVersion.sha256,
+                  }}
+                  onInstallerOpened={downloadHistory.refresh}
+                />
+              )}
+            </View>
+          ) : null}
+          {app.currentVersion.supportsTv ? (
+            <View style={styles.actionStack}>
+              {renderTvInstallAction ? renderTvInstallAction(app) : (
+                <>
+                  <Button disabled label="TV'ye kur" variant="secondary" />
+                  <AppText style={styles.centered} tone="subtle" variant="label">
+                    TV kurulumu ADB entegrasyonu tamamlandığında açılacak.
+                  </AppText>
+                </>
+              )}
+            </View>
+          ) : null}
         </View>
 
         <AppText variant="title" style={styles.sectionTitle}>Hakkında</AppText>
@@ -185,6 +209,8 @@ const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg },
   heroText: { flex: 1, marginLeft: spacing.lg, gap: spacing.xs },
   download: { marginTop: spacing.xl },
+  actionStack: { gap: spacing.sm, marginBottom: spacing.md },
+  centered: { textAlign: 'center' },
   sectionTitle: { marginTop: spacing.xxl, marginBottom: spacing.md },
   hashCard: { marginTop: spacing.xl, padding: spacing.md, borderRadius: radii.md, backgroundColor: colors.surface },
   hash: { marginTop: spacing.sm, fontFamily: 'monospace', fontSize: 12 },

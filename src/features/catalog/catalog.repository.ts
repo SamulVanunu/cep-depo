@@ -21,7 +21,7 @@ export type CatalogRepository = {
 export function normalizeCatalogFilters(filters: CatalogFilters): CatalogFilters {
   const query = filters.query.trim();
   const categorySlug = filters.categorySlug?.trim() || null;
-  return Object.freeze({ query, categorySlug, sort: filters.sort });
+  return Object.freeze({ query, categorySlug, sort: filters.sort, platform: filters.platform });
 }
 
 function errorFrom(error: DataError): Error {
@@ -51,6 +51,7 @@ export function createCatalogRepository(client: CatalogClient): CatalogRepositor
         p_query: normalized.query,
         p_category_slug: normalized.categorySlug,
         p_sort: normalized.sort,
+        p_platform: normalized.platform === 'all' ? null : normalized.platform,
       } as Database['public']['Functions']['search_catalog']['Args']);
 
       if (error) throw errorFrom(error);
@@ -76,7 +77,7 @@ export function createCatalogRepository(client: CatalogClient): CatalogRepositor
             category:categories!apps_category_id_fkey(id, slug, name),
             versions:app_versions(
               id, version_name, version_code, changelog, download_source, apk_path, apk_url,
-              apk_size_bytes, sha256, published_at
+              apk_size_bytes, sha256, published_at, supports_mobile, supports_tv, account_requirement
             ),
             screenshots:app_screenshots(id, path, alt_text, position)
           `,

@@ -17,16 +17,18 @@ describe('useCatalogFilters', () => {
     expect(result.current.debouncedQuery).toBe('İpTv');
   });
 
-  it('exposes category and sort selections without coupling them', () => {
+  it('exposes category, sort and platform selections without coupling them', () => {
     const { result } = renderHook(() => useCatalogFilters());
 
     act(() => {
       result.current.setCategorySlug('eglence');
       result.current.setSort('newest');
+      result.current.setPlatform('tv');
     });
 
     expect(result.current.categorySlug).toBe('eglence');
     expect(result.current.sort).toBe('newest');
+    expect(result.current.platform).toBe('tv');
     expect(result.current.query).toBe('');
   });
 });

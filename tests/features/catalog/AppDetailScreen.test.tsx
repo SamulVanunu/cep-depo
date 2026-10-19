@@ -21,7 +21,7 @@ jest.mock('../../../src/features/downloads/ApkDownloadPanel', () => {
   return {
     ApkDownloadPanel: jest.fn(({ action }: { action: 'download' | 'update' }) => (
       <Text accessibilityRole="button">
-        {action === 'update' ? 'GÜNCELLE' : 'APK İNDİR'}
+        {action === 'update' ? 'TELEFONDA GÜNCELLE' : 'TELEFONA KUR'}
       </Text>
     )),
   };
@@ -63,6 +63,9 @@ const app: CatalogApp = {
     apkSizeBytes: 24_000_000,
     sha256: 'b'.repeat(64),
     publishedAt: '2026-09-28T10:00:00Z',
+    supportsMobile: true,
+    supportsTv: true,
+    accountRequirement: 'optional',
   },
   versions: [
     {
@@ -74,6 +77,9 @@ const app: CatalogApp = {
       apkSizeBytes: 20_000_000,
       sha256: 'a'.repeat(64),
       publishedAt: '2026-09-20T10:00:00Z',
+      supportsMobile: true,
+      supportsTv: false,
+      accountRequirement: 'none',
     },
     {
       id: 'version-12',
@@ -84,6 +90,9 @@ const app: CatalogApp = {
       apkSizeBytes: 24_000_000,
       sha256: 'b'.repeat(64),
       publishedAt: '2026-09-28T10:00:00Z',
+      supportsMobile: true,
+      supportsTv: true,
+      accountRequirement: 'optional',
     },
   ],
   screenshots: [
@@ -168,7 +177,7 @@ describe('AppDetailScreen', () => {
     mockUseDownloadedVersion.mockReturnValue({ downloadedVersion: 11, refresh: jest.fn() });
     render(<AppDetailScreen resolveAssetUrl={path => path} slug="cep-iptv" />);
 
-    expect(screen.getByRole('button', { name: 'GÜNCELLE' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'TELEFONDA GÜNCELLE' })).toBeTruthy();
     expect(mockApkDownloadPanel.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ action: 'update' }));
   });
 
@@ -190,6 +199,44 @@ describe('AppDetailScreen', () => {
       },
       onInstallerOpened: refresh,
     }));
+  });
+
+  it('shows platform actions and account requirements from the current release', () => {
+    mockUseCatalogApp.mockReturnValue(queryResult({ data: app }));
+    render(<AppDetailScreen resolveAssetUrl={path => path} slug="cep-iptv" />);
+
+    expect(screen.getByText('Hesap isteğe bağlı')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'TELEFONA KUR' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: "TV'ye kur" })).toBeDisabled();
+  });
+
+  it('does not expose the phone installer for a TV-only release', () => {
+    const tvOnly = {
+      ...app,
+      currentVersion: { ...app.currentVersion, supportsMobile: false, supportsTv: true },
+    };
+    mockUseCatalogApp.mockReturnValue(queryResult({ data: tvOnly }));
+    render(<AppDetailScreen resolveAssetUrl={path => path} slug="cep-iptv" />);
+
+    expect(mockApkDownloadPanel).not.toHaveBeenCalled();
+    expect(screen.queryByText('Telefona kur')).toBeNull();
+    expect(screen.getByRole('button', { name: "TV'ye kur" })).toBeTruthy();
+  });
+
+  it('uses the injected TV install action without exposing native behavior here', () => {
+    const renderTvInstallAction = jest.fn(() => null);
+    mockUseCatalogApp.mockReturnValue(queryResult({ data: app }));
+
+    render(
+      <AppDetailScreen
+        renderTvInstallAction={renderTvInstallAction}
+        resolveAssetUrl={path => path}
+        slug="cep-iptv"
+      />,
+    );
+
+    expect(renderTvInstallAction).toHaveBeenCalledWith(app);
+    expect(screen.queryByRole('button', { name: "TV'ye kur" })).toBeNull();
   });
 
   it('opens reports only for the loaded app and its loaded versions', () => {

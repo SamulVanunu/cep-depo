@@ -1,4 +1,5 @@
 import type { PublishAppOption } from '../apps/publish-app-options';
+import type { ReleaseMetadataInput } from '../uploads/upload-schema';
 
 export type PublishStep = 'app' | 'apk' | 'complete';
 
@@ -22,6 +23,7 @@ export type PublishReview = Readonly<{
   size: number;
   sha256: string;
   changelog: string;
+  releaseMetadata: ReleaseMetadataInput;
   source:
     | Readonly<{ kind: 'storage' }>
     | Readonly<{ kind: 'external'; hostname: string }>;

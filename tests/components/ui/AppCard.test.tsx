@@ -25,6 +25,9 @@ const app: CatalogCard = {
     apkSizeBytes: 24_000_000,
     sha256: 'b'.repeat(64),
     publishedAt: '2026-09-28T10:00:00Z',
+    supportsMobile: true,
+    supportsTv: true,
+    accountRequirement: 'optional',
   },
 };
 
@@ -32,8 +35,13 @@ describe('AppCard', () => {
   it('announces app title, category and version without relying on color', () => {
     const rendered = render(<AppCard app={app} onPress={jest.fn()} />);
 
-    expect(rendered.getByLabelText('Cep IPTV, Eğlence, sürüm 1.2')).toBeTruthy();
+    expect(rendered.getByLabelText(
+      'Cep IPTV, Eğlence, sürüm 1.2, Mobil ve TV, Hesap isteğe bağlı',
+    )).toBeTruthy();
     expect(rendered.getByText('Öne çıkan')).toBeTruthy();
+    expect(rendered.getByText('Mobil')).toBeTruthy();
+    expect(rendered.getByText('TV')).toBeTruthy();
+    expect(rendered.getByText('Hesap isteğe bağlı')).toBeTruthy();
   });
 
   it('opens the selected app and labels a deterministic icon fallback', () => {
