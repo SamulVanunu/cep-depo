@@ -36,7 +36,8 @@ insert into public.categories (id, name, slug)
 values ('b1000000-0000-4000-8000-000000000001', 'External APK', 'external-apk');
 
 insert into public.apps (
-  id, category_id, slug, title, short_description, description, status
+  id, category_id, slug, title, short_description, description, icon_path,
+  status
 )
 values (
   'b2000000-0000-4000-8000-000000000001',
@@ -45,19 +46,20 @@ values (
   'External APK App',
   'An application backed by a direct HTTPS APK.',
   'An archived application used to verify external APK publication.',
+  'apps/b2000000-0000-4000-8000-000000000001/icons/b4000000-0000-4000-8000-000000000001.png',
   'archived'
 );
 
 select lives_ok(
   $$insert into public.app_versions (
       id, app_id, version_name, version_code, changelog, download_source,
-      apk_path, apk_url, apk_size_bytes, sha256, status
+      apk_path, apk_url, apk_size_bytes, sha256, status, package_name
     ) values (
       'b3000000-0000-4000-8000-000000000001',
       'b2000000-0000-4000-8000-000000000001',
       '1.0.0', 1, 'External release', 'external',
       null, 'https://downloads.example.com/releases/app.apk',
-      7654321, repeat('a', 64), 'draft'
+      7654321, repeat('a', 64), 'draft', 'com.example.external'
     )$$,
   'a valid external draft is accepted without a Storage path'
 );
@@ -179,7 +181,7 @@ select results_eq(
 );
 
 select lives_ok(
-  $$select public.admin_publish_version_and_activate_app(
+  $$select public.admin_publish_version_replacing_previous(
       'b0000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000001'
     )$$,

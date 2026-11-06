@@ -1,6 +1,6 @@
 begin;
 
-select plan(25);
+select plan(17);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -29,7 +29,8 @@ insert into public.categories (id, name, slug)
 values ('a2100000-0000-4000-8000-000000000001', 'Admin Test', 'admin-test');
 
 insert into public.apps (
-  id, category_id, slug, title, short_description, description, status
+  id, category_id, slug, title, short_description, description, icon_path,
+  package_name, status
 )
 values (
   'a2200000-0000-4000-8000-000000000001',
@@ -38,6 +39,8 @@ values (
   'Admin Transition App',
   'An application used for admin transition tests.',
   'An application used to verify audited admin state transitions.',
+  'apps/a2200000-0000-4000-8000-000000000001/icons/a2600000-0000-4000-8000-000000000001.png',
+  null,
   'active'
 ), (
   'a2200000-0000-4000-8000-000000000002',
@@ -46,39 +49,41 @@ values (
   'Admin Archived App',
   'An archived application used for publication tests.',
   'An archived application used to verify atomic publication and activation.',
+  null,
+  null,
   'archived'
 );
 
 insert into public.app_versions (
-  id, app_id, version_name, version_code, changelog, apk_path,
+  id, app_id, version_name, version_code, changelog, package_name, apk_path,
   apk_size_bytes, sha256, status
 )
 values
   (
     'a2300000-0000-4000-8000-000000000001',
     'a2200000-0000-4000-8000-000000000001',
-    '1.0.0', 1, 'Initial version',
+    '1.0.0', 1, 'Initial version', 'com.example.transition',
     'apps/a2200000-0000-4000-8000-000000000001/versions/a2300000-0000-4000-8000-000000000001.apk',
     12345, repeat('1', 64), 'draft'
   ),
   (
     'a2300000-0000-4000-8000-000000000002',
     'a2200000-0000-4000-8000-000000000001',
-    '2.0.0', 2, 'Missing APK',
+    '2.0.0', 2, 'Missing APK', 'com.example.transition',
     'apps/a2200000-0000-4000-8000-000000000001/versions/a2300000-0000-4000-8000-000000000002.apk',
     54321, repeat('2', 64), 'draft'
   ),
   (
     'a2300000-0000-4000-8000-000000000003',
     'a2200000-0000-4000-8000-000000000002',
-    '3.0.0', 3, 'Atomic publication',
+    '3.0.0', 3, 'Atomic publication', 'com.example.atomic',
     'apps/a2200000-0000-4000-8000-000000000002/versions/a2300000-0000-4000-8000-000000000003.apk',
     33333, repeat('3', 64), 'draft'
   ),
   (
     'a2300000-0000-4000-8000-000000000004',
     'a2200000-0000-4000-8000-000000000002',
-    '4.0.0', 4, 'Missing atomic APK',
+    '4.0.0', 4, 'Missing atomic APK', 'com.example.atomic',
     'apps/a2200000-0000-4000-8000-000000000002/versions/a2300000-0000-4000-8000-000000000004.apk',
     44444, repeat('4', 64), 'draft'
   );
@@ -202,7 +207,7 @@ select is(
 );
 
 select throws_ok(
-  $$select public.admin_publish_version(
+  $$select public.admin_publish_version_replacing_previous(
     'a2000000-0000-4000-8000-000000000001',
     'a2300000-0000-4000-8000-000000000002'
   )$$,
@@ -212,7 +217,7 @@ select throws_ok(
 );
 
 select lives_ok(
-  $$select public.admin_publish_version(
+  $$select public.admin_publish_version_replacing_previous(
     'a2000000-0000-4000-8000-000000000001',
     'a2300000-0000-4000-8000-000000000001'
   )$$,
@@ -234,84 +239,11 @@ select is(
   'publication writes one audit row'
 );
 
-select throws_ok(
-  $$select public.admin_publish_version_and_activate_app(
-    'a2000000-0000-4000-8000-000000000001',
-    'a2300000-0000-4000-8000-000000000004'
-  )$$,
-  'P0001',
-  'Yayımlanacak APK doğrulanamadı.',
-  'atomic publication rejects a draft without its canonical APK'
-);
-
-select results_eq(
-  $$select app.status::text, version.status::text
-    from public.apps as app
-    join public.app_versions as version on version.app_id = app.id
-    where app.id = 'a2200000-0000-4000-8000-000000000002'
-      and version.id = 'a2300000-0000-4000-8000-000000000004'$$,
-  $$values ('archived'::text, 'draft'::text)$$,
-  'failed atomic publication leaves both app and version unchanged'
-);
-
-select lives_ok(
-  $$select public.admin_publish_version_and_activate_app(
-    'a2000000-0000-4000-8000-000000000001',
-    'a2300000-0000-4000-8000-000000000003'
-  )$$,
-  'a verified draft can be published and its app activated atomically'
-);
-
-select results_eq(
-  $$select app.status::text, version.status::text
-    from public.apps as app
-    join public.app_versions as version on version.app_id = app.id
-    where app.id = 'a2200000-0000-4000-8000-000000000002'
-      and version.id = 'a2300000-0000-4000-8000-000000000003'$$,
-  $$values ('active'::text, 'published'::text)$$,
-  'atomic publication changes both states together'
-);
-
 select is(
   (select count(*)::integer from public.admin_audit_logs
-   where action = 'version.publish' and target_id = 'a2300000-0000-4000-8000-000000000003'),
+   where action = 'version.replace' and target_id = 'a2300000-0000-4000-8000-000000000001'),
   1,
-  'atomic publication writes one version audit row'
-);
-
-select is(
-  (select metadata->>'download_source' from public.admin_audit_logs
-   where action = 'version.publish' and target_id = 'a2300000-0000-4000-8000-000000000003'),
-  'storage',
-  'Storage publication records its explicit download source'
-);
-
-select is(
-  (select count(*)::integer from public.admin_audit_logs
-   where action = 'app.activate' and target_id = 'a2200000-0000-4000-8000-000000000002'),
-  1,
-  'atomic publication writes one app activation audit row'
-);
-
-select lives_ok(
-  $$select public.admin_publish_version_and_activate_app(
-    'a2000000-0000-4000-8000-000000000001',
-    'a2300000-0000-4000-8000-000000000003'
-  )$$,
-  'retrying atomic publication is idempotent'
-);
-
-select results_eq(
-  $$select
-      count(*) filter (where action = 'version.publish')::integer,
-      count(*) filter (where action = 'app.activate')::integer
-    from public.admin_audit_logs
-    where target_id in (
-      'a2300000-0000-4000-8000-000000000003',
-      'a2200000-0000-4000-8000-000000000002'
-    )$$,
-  $$values (1, 1)$$,
-  'retrying atomic publication does not duplicate audit rows'
+  'publication records the replacement transition'
 );
 
 create temporary table published_timestamp as
