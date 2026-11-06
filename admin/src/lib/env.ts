@@ -14,6 +14,8 @@ export type ServerEnv = PublicEnv &
     adminReadOnly: boolean;
     authEmailEnabled: boolean;
     externalApkPublishingEnabled: boolean;
+    cleanupWorkerSecret: string | null;
+    cronSecret: string | null;
   }>;
 
 const secureOrLoopbackUrl = z.string().url().refine(value => {
@@ -28,12 +30,19 @@ const publicSchema = z.object({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().trim().min(1),
 });
 
+const optionalSecret = z.preprocess(
+  value => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().trim().min(32).optional(),
+);
+
 const serverSchema = publicSchema.extend({
   NEXT_PUBLIC_SITE_URL: secureOrLoopbackUrl,
   SUPABASE_SECRET_KEY: z.string().trim().min(1),
   ADMIN_READ_ONLY: z.enum(['true', 'false']).default('true'),
   AUTH_EMAIL_ENABLED: z.enum(['true', 'false']).default('false'),
   EXTERNAL_APK_PUBLISHING_ENABLED: z.enum(['true', 'false']).default('false'),
+  CLEANUP_WORKER_SECRET: optionalSecret,
+  CRON_SECRET: optionalSecret,
 });
 
 function parseEnv<T>(schema: z.ZodType<T>, source: EnvSource): T {
@@ -69,5 +78,7 @@ export function getServerEnv(source: EnvSource = process.env): ServerEnv {
     adminReadOnly: env.ADMIN_READ_ONLY === 'true',
     authEmailEnabled: env.AUTH_EMAIL_ENABLED === 'true',
     externalApkPublishingEnabled: env.EXTERNAL_APK_PUBLISHING_ENABLED === 'true',
+    cleanupWorkerSecret: env.CLEANUP_WORKER_SECRET ?? null,
+    cronSecret: env.CRON_SECRET ?? null,
   };
 }

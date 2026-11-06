@@ -2,7 +2,9 @@ import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { getPublicEnv } from './src/lib/env';
+import { authCookieOptions } from './src/lib/supabase/auth-cookie-options';
 import { contentSecurityPolicy } from './src/server/http/content-security-policy';
+import { isBearerAuthenticatedPath } from './src/server/http/machine-paths';
 import type { Database } from './src/types/database.types';
 
 function applySecurityHeaders(response: NextResponse, nonce: string, policy: string): NextResponse {
@@ -11,6 +13,9 @@ function applySecurityHeaders(response: NextResponse, nonce: string, policy: str
   return response;
 }
 
+// Machine routes authenticate with their own bearer secret inside the handler.
+// They must skip the session check, otherwise the proxy answers the scheduler
+// with a login redirect and the cleanup never runs.
 export async function proxy(request: NextRequest) {
   const env = getPublicEnv();
   const nonce = crypto.randomUUID().replaceAll('-', '');
@@ -20,7 +25,13 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set('x-nonce', nonce);
 
   let response = NextResponse.next({ request: { headers: requestHeaders } });
+
+  if (isBearerAuthenticatedPath(request.nextUrl.pathname)) {
+    return applySecurityHeaders(response, nonce, policy);
+  }
+
   const supabase = createServerClient<Database>(env.supabaseUrl, env.supabasePublishableKey, {
+    cookieOptions: authCookieOptions(),
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(cookiesToSet) {

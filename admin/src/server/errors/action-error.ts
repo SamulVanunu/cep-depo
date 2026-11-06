@@ -7,6 +7,11 @@ export type ActionErrorCode =
   | 'NOT_FOUND'
   | 'FEATURE_DISABLED'
   | 'TEMPORARY'
+  | 'RETIRED_ASSET'
+  | 'STALE_JOB'
+  | 'REFERENCED'
+  | 'STORAGE_UNKNOWN'
+  | 'MANUAL_REVIEW'
   | 'INTERNAL';
 
 export type ActionError = Readonly<{
@@ -29,6 +34,11 @@ const publicMessages: Readonly<Record<ActionErrorCode, string>> = {
   NOT_FOUND: 'İstenen kayıt bulunamadı.',
   FEATURE_DISABLED: 'Harici APK yayınlama henüz etkin değil. Taslak korundu.',
   TEMPORARY: 'İşlem geçici olarak tamamlanamadı. Lütfen yeniden dene.',
+  RETIRED_ASSET: 'Bu dosya silinmek üzere kuyruğa alınmış.',
+  STALE_JOB: 'Bu iş sayfa açıldıktan sonra değişti. Sayfayı yenileyip yeniden dene.',
+  REFERENCED: 'Dosya hâlâ bir kayıt tarafından kullanılıyor; yeniden kuyruğa alınamaz.',
+  STORAGE_UNKNOWN: 'Depolama durumu doğrulanamadı; nesne silinmiş olabilir. İş yeniden kuyruğa alınmadı.',
+  MANUAL_REVIEW: 'Nesnenin kimliği doğrulanamadı. Bu iş otomatik yeniden denenemez; elle inceleme gerekir.',
   INTERNAL: 'Beklenmeyen bir hata oluştu. Lütfen yeniden dene.',
 };
 

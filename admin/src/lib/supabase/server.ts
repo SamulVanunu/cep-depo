@@ -5,12 +5,14 @@ import { cookies } from 'next/headers';
 
 import type { Database } from '../../types/database.types';
 import { getPublicEnv } from '../env';
+import { authCookieOptions } from './auth-cookie-options';
 
 export async function createServerSupabaseClient() {
   const env = getPublicEnv();
   const cookieStore = await cookies();
 
   return createServerClient<Database>(env.supabaseUrl, env.supabasePublishableKey, {
+    cookieOptions: authCookieOptions(),
     cookies: {
       getAll() {
         return cookieStore.getAll();

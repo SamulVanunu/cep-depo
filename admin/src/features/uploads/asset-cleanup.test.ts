@@ -1,83 +1,185 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  removeOrEnqueueAssets,
+  enqueueCleanupAssets,
   type CleanupAsset,
   type CleanupDependencies,
 } from './asset-cleanup';
+import type { CleanupEnqueueResult } from './cleanup-enqueue';
+import { assetIdFromDraftPath } from './cleanup-paths';
 
 const asset: CleanupAsset = {
   bucket: 'apks',
   path: 'apps/a2000000-0000-4000-8000-000000000001/versions/a3000000-0000-4000-8000-000000000001.apk',
-  operationId: 'a3000000-0000-4000-8000-000000000001',
+  assetId: 'a3000000-0000-4000-8000-000000000001',
   targetType: 'apk',
 };
 
-function dependencies(overrides: Partial<CleanupDependencies> = {}): CleanupDependencies {
-  return {
-    remove: vi.fn(async () => ({ error: null })),
-    enqueue: vi.fn(async () => ({ error: null })),
-    complete: vi.fn(async () => ({ error: null })),
-    ...overrides,
-  };
+const queuedNew: CleanupEnqueueResult = {
+  queued: true,
+  deduped: false,
+  audit: 'recorded',
+  enqueueError: null,
+  auditError: null,
+};
+
+function dependencies(
+  enqueue: (asset: CleanupAsset) => Promise<CleanupEnqueueResult> = async () => queuedNew,
+): CleanupDependencies {
+  return { enqueue: vi.fn(enqueue) };
 }
 
-describe('removeOrEnqueueAssets', () => {
-  it('removes a validated managed object and completes its durable job', async () => {
+describe('enqueueCleanupAssets', () => {
+  it('queues a validated managed object instead of deleting it', async () => {
     const subject = dependencies();
 
-    await expect(removeOrEnqueueAssets([asset], subject)).resolves.toEqual({ pending: 0 });
-    expect(subject.remove).toHaveBeenCalledWith('apks', asset.path);
-    expect(subject.enqueue).not.toHaveBeenCalled();
-    expect(subject.complete).toHaveBeenCalledWith(asset);
+    await expect(enqueueCleanupAssets([asset], subject)).resolves.toEqual({
+      queued: 1,
+      alreadyQueued: 0,
+      enqueueFailures: 0,
+      auditFailures: 0,
+    });
+    expect(subject.enqueue).toHaveBeenCalledWith(asset);
   });
 
-  it('accepts every managed bucket and canonical target path', async () => {
+  it('queues every managed bucket and canonical target path', async () => {
     const subject = dependencies();
     const assets: CleanupAsset[] = [
       {
         bucket: 'apk-drafts',
         path: 'operations/a4000000-0000-4000-8000-000000000001/source.apk',
-        operationId: 'a4000000-0000-4000-8000-000000000001',
+        assetId: 'a4000000-0000-4000-8000-000000000001',
         targetType: 'apk_draft',
       },
       {
         bucket: 'app-assets',
         path: 'apps/a2000000-0000-4000-8000-000000000001/icons/a5000000-0000-4000-8000-000000000001.png',
-        operationId: 'a4000000-0000-4000-8000-000000000002',
+        assetId: 'a5000000-0000-4000-8000-000000000001',
         targetType: 'icon',
       },
       {
         bucket: 'app-assets',
         path: 'apps/a2000000-0000-4000-8000-000000000001/screenshots/a5000000-0000-4000-8000-000000000002.webp',
-        operationId: 'a4000000-0000-4000-8000-000000000003',
+        assetId: 'a5000000-0000-4000-8000-000000000002',
         targetType: 'screenshot',
       },
     ];
 
-    await expect(removeOrEnqueueAssets(assets, subject)).resolves.toEqual({ pending: 0 });
-    expect(subject.remove).toHaveBeenCalledTimes(3);
+    await expect(enqueueCleanupAssets(assets, subject)).resolves.toEqual({
+      queued: 3,
+      alreadyQueued: 0,
+      enqueueFailures: 0,
+      auditFailures: 0,
+    });
+    expect(subject.enqueue).toHaveBeenCalledTimes(3);
   });
 
-  it('queues exactly one service cleanup job when removal fails', async () => {
-    const subject = dependencies({
-      remove: vi.fn(async () => ({ error: new Error('storage failure https://secret') })),
-    });
+  it('counts an object that was already queued as queued without a second queue row', async () => {
+    const subject = dependencies(async () => ({
+      queued: true,
+      deduped: true,
+      audit: 'already_recorded',
+      enqueueError: null,
+      auditError: null,
+    }));
 
-    await expect(removeOrEnqueueAssets([asset], subject)).resolves.toEqual({ pending: 1 });
-    expect(subject.enqueue).toHaveBeenCalledOnce();
-    expect(subject.enqueue).toHaveBeenCalledWith(asset);
-    expect(subject.complete).not.toHaveBeenCalled();
+    await expect(enqueueCleanupAssets([asset], subject)).resolves.toEqual({
+      queued: 1,
+      alreadyQueued: 1,
+      enqueueFailures: 0,
+      auditFailures: 0,
+    });
   });
 
-  it('treats a pending unique conflict as an idempotent queued cleanup', async () => {
-    const subject = dependencies({
-      remove: vi.fn(async () => ({ error: new Error('failed') })),
-      enqueue: vi.fn(async () => ({ error: { code: '23505' } })),
-    });
+  it('reports an enqueue failure without claiming the object is queued', async () => {
+    const subject = dependencies(async () => ({
+      queued: false,
+      deduped: false,
+      audit: 'not_attempted',
+      enqueueError: { code: '42501' },
+      auditError: null,
+    }));
 
-    await expect(removeOrEnqueueAssets([asset], subject)).resolves.toEqual({ pending: 1 });
-    expect(subject.enqueue).toHaveBeenCalledOnce();
+    await expect(enqueueCleanupAssets([asset], subject)).resolves.toEqual({
+      queued: 0,
+      alreadyQueued: 0,
+      enqueueFailures: 1,
+      auditFailures: 0,
+    });
+  });
+
+  it('keeps a queued object out of the enqueue-failure count when the audit fails', async () => {
+    const subject = dependencies(async () => ({
+      queued: true,
+      deduped: false,
+      audit: 'failed',
+      enqueueError: null,
+      auditError: { code: 'P0001' },
+    }));
+
+    await expect(enqueueCleanupAssets([asset], subject)).resolves.toEqual({
+      queued: 1,
+      alreadyQueued: 0,
+      enqueueFailures: 0,
+      auditFailures: 1,
+    });
+  });
+
+  it('keeps processing every asset after a rejected enqueue', async () => {
+    const assets: CleanupAsset[] = [
+      asset,
+      {
+        bucket: 'app-assets',
+        path: 'apps/a2000000-0000-4000-8000-000000000001/icons/a5000000-0000-4000-8000-000000000001.png',
+        assetId: 'a5000000-0000-4000-8000-000000000001',
+        targetType: 'icon',
+      },
+      {
+        bucket: 'app-assets',
+        path: 'apps/a2000000-0000-4000-8000-000000000001/screenshots/a5000000-0000-4000-8000-000000000002.webp',
+        assetId: 'a5000000-0000-4000-8000-000000000002',
+        targetType: 'screenshot',
+      },
+      {
+        bucket: 'apk-drafts',
+        path: 'operations/a4000000-0000-4000-8000-000000000002/source.apk',
+        assetId: 'a4000000-0000-4000-8000-000000000002',
+        targetType: 'apk_draft',
+      },
+    ];
+    const subject = dependencies(
+      vi.fn()
+        .mockRejectedValueOnce(new Error('queue rejected'))
+        .mockResolvedValueOnce({
+          queued: true,
+          deduped: true,
+          audit: 'already_recorded',
+          enqueueError: null,
+          auditError: null,
+        })
+        .mockResolvedValueOnce({
+          queued: false,
+          deduped: false,
+          audit: 'not_attempted',
+          enqueueError: { code: 'P0001' },
+          auditError: null,
+        })
+        .mockResolvedValueOnce({
+          queued: true,
+          deduped: false,
+          audit: 'failed',
+          enqueueError: null,
+          auditError: { code: 'P0001' },
+        }),
+    );
+
+    await expect(enqueueCleanupAssets(assets, subject)).resolves.toEqual({
+      queued: 2,
+      alreadyQueued: 1,
+      enqueueFailures: 2,
+      auditFailures: 1,
+    });
+    expect(subject.enqueue).toHaveBeenCalledTimes(4);
   });
 
   it.each([
@@ -95,58 +197,36 @@ describe('removeOrEnqueueAssets', () => {
     },
     {
       ...asset,
-      operationId: 'not-a-uuid',
+      assetId: 'not-a-uuid',
     },
-  ])('rejects external or arbitrary cleanup identity %# before deletion', async invalid => {
+  ])('rejects external or arbitrary cleanup identity %# before enqueueing', async invalid => {
     const subject = dependencies();
 
-    await expect(removeOrEnqueueAssets([invalid], subject)).rejects.toMatchObject({
+    await expect(enqueueCleanupAssets([invalid], subject)).rejects.toMatchObject({
       code: 'VALIDATION',
     });
-    expect(subject.remove).not.toHaveBeenCalled();
     expect(subject.enqueue).not.toHaveBeenCalled();
   });
 
-  it('validates the complete batch before deleting any object', async () => {
+  it('validates the complete batch before enqueueing any object', async () => {
     const subject = dependencies();
 
-    await expect(removeOrEnqueueAssets([
+    await expect(enqueueCleanupAssets([
       asset,
       { ...asset, path: 'https://downloads.example.com/app.apk' },
     ], subject)).rejects.toMatchObject({ code: 'VALIDATION' });
-    expect(subject.remove).not.toHaveBeenCalled();
+    expect(subject.enqueue).not.toHaveBeenCalled();
   });
+});
 
-  it('keeps processing every asset when removal, enqueue, or completion fails', async () => {
-    const assets: CleanupAsset[] = [
-      asset,
-      {
-        bucket: 'app-assets',
-        path: 'apps/a2000000-0000-4000-8000-000000000001/icons/a5000000-0000-4000-8000-000000000001.png',
-        operationId: 'a5000000-0000-4000-8000-000000000001',
-        targetType: 'icon',
-      },
-      {
-        bucket: 'app-assets',
-        path: 'apps/a2000000-0000-4000-8000-000000000001/screenshots/a5000000-0000-4000-8000-000000000002.webp',
-        operationId: 'a5000000-0000-4000-8000-000000000002',
-        targetType: 'screenshot',
-      },
-    ];
-    const subject = dependencies({
-      remove: vi.fn()
-        .mockRejectedValueOnce(new Error('remove rejected'))
-        .mockResolvedValueOnce({ error: new Error('remove failed') })
-        .mockResolvedValueOnce({ error: null }),
-      enqueue: vi.fn()
-        .mockRejectedValueOnce(new Error('enqueue rejected'))
-        .mockResolvedValueOnce({ error: { code: '23505' } }),
-      complete: vi.fn(async () => ({ error: new Error('completion failed') })),
-    });
-
-    await expect(removeOrEnqueueAssets(assets, subject)).resolves.toEqual({ pending: 3 });
-    expect(subject.remove).toHaveBeenCalledTimes(3);
-    expect(subject.enqueue).toHaveBeenCalledTimes(2);
-    expect(subject.complete).toHaveBeenCalledTimes(1);
+describe('assetIdFromDraftPath', () => {
+  it('derives the asset id from a canonical draft path', () => {
+    expect(
+      assetIdFromDraftPath('operations/a4000000-0000-4000-8000-000000000001/source.apk'),
+    ).toBe('a4000000-0000-4000-8000-000000000001');
+    expect(assetIdFromDraftPath('../x')).toBeNull();
+    expect(
+      assetIdFromDraftPath('operations/a4000000-0000-4000-8000-000000000001/other.apk'),
+    ).toBeNull();
   });
 });

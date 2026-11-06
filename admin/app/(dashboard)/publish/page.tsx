@@ -5,6 +5,9 @@ import { resolvePreselectedApp } from '../../../src/features/publishing/publish-
 import { PublishWizard } from '../../../src/features/publishing/publish-wizard';
 
 export const metadata: Metadata = { title: 'APK yayınla' };
+// Server-side APK verification reads up to 50 MB over storage ranges and
+// recomputes SHA-256, so give the page's server action more than the default.
+export const maxDuration = 60;
 
 export default async function PublishPage({
   searchParams,

@@ -1,21 +1,46 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseApkManifest } from './apk-manifest';
+import {
+  MAX_CENTRAL_DIRECTORY_BYTES,
+  MAX_MANIFEST_COMPRESSED_BYTES,
+  MAX_MANIFEST_UNCOMPRESSED_BYTES,
+  parseApkManifest,
+  parseApkManifestFromSource,
+  type ApkByteSource,
+} from './apk-manifest';
 import {
   COMPRESSION_DEFLATE,
   buildDocumentHeader,
+  buildManifestXml,
   buildStartElement,
   buildStringPool,
+  createApkBombManifest,
   createApkFromXmlBytes,
   createApkUnsupportedCompression,
+  createApkWithCentralDirectorySize,
+  createApkWithCorruptCentralDirectory,
   createApkWithDuplicateManifest,
+  createApkWithManifestCompressedSize,
   createApkWithoutManifest,
+  createApkWithZip64Eocd,
   createApkMalformedManifest,
   createValidApk,
 } from './fixtures/manifest-apk';
 import { concatUint8Arrays } from './fixtures/zip-util';
 
 const EXPECTED_ERROR = 'APK manifesti okunamadı. Lütfen geçerli bir APK dosyası seçin.';
+const TAIL_WINDOW = 128 * 1024;
+
+async function fixtureSource(blob: Blob, sizes?: number[]): Promise<ApkByteSource> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  return {
+    size: bytes.length,
+    async read(start, endExclusive) {
+      sizes?.push(endExclusive - start);
+      return bytes.slice(start, endExclusive);
+    },
+  };
+}
 
 describe('parseApkManifest', () => {
   it('parses a structurally valid APK manifest (real ZIP/AXML)', async () => {
@@ -255,5 +280,132 @@ describe('parseApkManifest', () => {
   it('rejects when the file is too small to contain a ZIP', async () => {
     const file = new Blob([new Uint8Array([0x50, 0x4b, 0x03])]);
     await expect(parseApkManifest(file)).rejects.toThrow(EXPECTED_ERROR);
+  });
+});
+
+describe('parseApkManifestFromSource hardening', () => {
+  it('reads through ApkByteSource without a Blob', async () => {
+    const file = await createValidApk({ packageName: 'com.example.src', versionName: '2.0', versionCode: 7 });
+    const source = await fixtureSource(file);
+
+    await expect(parseApkManifestFromSource(source)).resolves.toMatchObject({
+      packageName: 'com.example.src',
+      versionCode: 7,
+    });
+  });
+
+  it('rejects a manifest entry above the compressed cap without reading it', async () => {
+    const sizes: number[] = [];
+    const source = await fixtureSource(
+      await createApkWithManifestCompressedSize(MAX_MANIFEST_COMPRESSED_BYTES + 1),
+      sizes,
+    );
+
+    await expect(parseApkManifestFromSource(source)).rejects.toThrow(EXPECTED_ERROR);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(TAIL_WINDOW);
+  });
+
+  it('rejects a manifest that inflates beyond the uncompressed cap', async () => {
+    const source = await fixtureSource(
+      await createApkBombManifest(MAX_MANIFEST_UNCOMPRESSED_BYTES + 1),
+    );
+
+    await expect(parseApkManifestFromSource(source)).rejects.toThrow(EXPECTED_ERROR);
+  });
+
+  it('rejects a central directory above the size cap without reading it', async () => {
+    const sizes: number[] = [];
+    const source = await fixtureSource(
+      await createApkWithCentralDirectorySize(MAX_CENTRAL_DIRECTORY_BYTES + 1),
+      sizes,
+    );
+
+    await expect(parseApkManifestFromSource(source)).rejects.toThrow(EXPECTED_ERROR);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(TAIL_WINDOW);
+  });
+
+  it('rejects a truncated or inconsistent central directory', async () => {
+    const source = await fixtureSource(await createApkWithCorruptCentralDirectory());
+
+    await expect(parseApkManifestFromSource(source)).rejects.toThrow(EXPECTED_ERROR);
+  });
+
+  it('rejects a non-zero versionCodeMajor', async () => {
+    const axml = buildManifestXml({
+      packageName: 'com.example.app',
+      versionName: '1.0',
+      versionCode: 3,
+      versionCodeMajor: 1,
+    });
+    const source = await fixtureSource(await createApkFromXmlBytes(axml));
+
+    await expect(parseApkManifestFromSource(source)).rejects.toThrow(EXPECTED_ERROR);
+  });
+
+  it('rejects the ZIP64 entry-count sentinel explicitly', async () => {
+    const source = await fixtureSource(await createApkWithZip64Eocd());
+
+    await expect(parseApkManifestFromSource(source)).rejects.toThrow(EXPECTED_ERROR);
+  });
+
+  it('never requests a slice larger than the tail window', async () => {
+    const file = await createApkFromXmlBytes(
+      buildManifestXml({ packageName: 'com.example.app', versionName: '1.0', versionCode: 1 }),
+      { padBytes: 2 * 1024 * 1024 },
+    );
+    const sizes: number[] = [];
+
+    await parseApkManifestFromSource(await fixtureSource(file, sizes));
+
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(TAIL_WINDOW);
+  });
+
+  it('parses an APK whose EOCD carries a comment', async () => {
+    const file = await createApkFromXmlBytes(
+      buildManifestXml({ packageName: 'com.example.comment', versionName: '1.2', versionCode: 5 }),
+      { eocdComment: 'packaged by a real build tool' },
+    );
+
+    await expect(parseApkManifest(file)).resolves.toMatchObject({
+      packageName: 'com.example.comment',
+      versionName: '1.2',
+      versionCode: 5,
+    });
+  });
+
+  it('parses an APK written with local data descriptors', async () => {
+    const file = await createApkFromXmlBytes(
+      buildManifestXml({ packageName: 'com.example.descriptor', versionName: '2.1', versionCode: 9 }),
+      { dataDescriptor: true },
+    );
+
+    await expect(parseApkManifest(file)).resolves.toMatchObject({
+      packageName: 'com.example.descriptor',
+      versionName: '2.1',
+      versionCode: 9,
+    });
+  });
+
+  it('propagates a byte-source failure instead of reporting an invalid APK', async () => {
+    const failure = new Error('range request failed');
+    const source: ApkByteSource = {
+      size: 4096,
+      async read() {
+        throw failure;
+      },
+    };
+
+    await expect(parseApkManifestFromSource(source)).rejects.toBe(failure);
+  });
+
+  it('normalizes a Blob read failure to the operator message', async () => {
+    const broken = {
+      size: 4096,
+      slice() {
+        throw new Error('blob unavailable');
+      },
+    } as unknown as Blob;
+
+    await expect(parseApkManifest(broken)).rejects.toThrow(EXPECTED_ERROR);
   });
 });

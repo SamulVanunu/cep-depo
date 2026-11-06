@@ -46,7 +46,7 @@ function lifecycleDependencies(
     authorize: vi.fn(async () => ({ userId: actorId })),
     setStatusRpc: vi.fn(async () => ({ error: null })),
     deleteRpc: vi.fn(async () => ({ data: [], error: null })),
-    cleanupAssets: vi.fn(async () => ({ pending: 0 })),
+    cleanupAssets: vi.fn(async () => ({ queued: 0, alreadyQueued: 0, enqueueFailures: 0, auditFailures: 0 })),
     ...overrides,
   };
 }
@@ -67,6 +67,12 @@ function catalogDependencies(
     ...overrides,
   };
 }
+
+const catalogRefreshError = {
+  code: 'TEMPORARY' as const,
+  message: 'Katalog yenilenemedi.',
+  correlationId: 'c1000000-0000-4000-8000-000000000001',
+};
 
 function publishingDependencies(
   overrides: Partial<PublishingAppActionDependencies> = {},
@@ -328,6 +334,155 @@ describe('catalog actions', () => {
   });
 });
 
+describe('catalog refresh integration', () => {
+  it('refreshes the JSON catalog after a successful status change', async () => {
+    const order: string[] = [];
+    const refreshCatalog = vi.fn(async () => {
+      order.push('refresh');
+      return { error: null };
+    });
+    const result = await setAppPublicationStatus(appId, 'active', lifecycleDependencies({
+      setStatusRpc: vi.fn(async () => {
+        order.push('rpc');
+        return { error: null };
+      }),
+      refreshCatalog,
+    }));
+
+    expect(result).toEqual({ ok: true, data: { id: appId, status: 'active' } });
+    expect(order).toEqual(['rpc', 'refresh']);
+  });
+
+  it('keeps a successful status change when catalog refresh fails', async () => {
+    const result = await setAppPublicationStatus(appId, 'archived', lifecycleDependencies({
+      refreshCatalog: vi.fn(async () => ({ error: catalogRefreshError })),
+    }));
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { id: appId, status: 'archived', catalogWarning: catalogRefreshError },
+    });
+    expect(JSON.stringify(result)).not.toContain('storage');
+  });
+
+  it('never refreshes the catalog when the status RPC fails', async () => {
+    const refreshCatalog = vi.fn();
+    const result = await setAppPublicationStatus(appId, 'active', lifecycleDependencies({
+      setStatusRpc: vi.fn(async () => ({ error: { status: 503 } })),
+      refreshCatalog,
+    }));
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'TEMPORARY' } });
+    expect(refreshCatalog).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the catalog after a successful app update and surfaces a refresh warning', async () => {
+    const refreshCatalog = vi.fn(async () => ({ error: catalogRefreshError }));
+    const result = await updateApp(appId, appForm(), catalogDependencies({ refreshCatalog }));
+
+    expect(refreshCatalog).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ ok: true, data: { id: appId, catalogWarning: catalogRefreshError } });
+  });
+
+  it('refreshes the catalog after a successful category update', async () => {
+    const data = new FormData();
+    data.set('name', 'Genel');
+    data.set('slug', 'genel');
+    data.set('position', '0');
+    data.set('isActive', 'on');
+    const refreshCatalog = vi.fn(async () => ({ error: null }));
+
+    const result = await updateCategory(categoryId, data, catalogDependencies({ refreshCatalog }));
+
+    expect(refreshCatalog).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ ok: true, data: { id: categoryId } });
+    expect(result).not.toHaveProperty('data.catalogWarning');
+  });
+
+  it('refreshes the catalog after a successful category creation', async () => {
+    const data = new FormData();
+    data.set('name', 'Araçlar');
+    data.set('slug', 'araclar');
+    data.set('position', '1');
+    data.set('isActive', 'on');
+    const refreshCatalog = vi.fn(async () => ({ error: catalogRefreshError }));
+
+    const result = await createCategory(data, catalogDependencies({ refreshCatalog }));
+
+    expect(refreshCatalog).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({
+      ok: true,
+      data: { id: categoryId, catalogWarning: catalogRefreshError },
+    });
+  });
+
+  it('never refreshes the catalog when category creation fails', async () => {
+    const data = new FormData();
+    data.set('name', 'Araçlar');
+    data.set('slug', 'araclar');
+    data.set('position', '1');
+    data.set('isActive', 'on');
+    const refreshCatalog = vi.fn();
+
+    const result = await createCategory(
+      data,
+      catalogDependencies({ insertCategory: vi.fn(async () => ({ data: null, error: { code: '23505' } })), refreshCatalog }),
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    expect(refreshCatalog).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the catalog only after a permanent delete succeeds', async () => {
+    const order: string[] = [];
+    const refreshCatalog = vi.fn(async () => {
+      order.push('refresh');
+      return { error: null };
+    });
+    const result = await deleteAppPermanently(appId, 'Örnek Uygulama', lifecycleDependencies({
+      deleteRpc: vi.fn(async () => {
+        order.push('delete');
+        return { data: [], error: null };
+      }),
+      refreshCatalog,
+    }));
+
+    expect(result).toEqual({ ok: true, data: { deleted: true, cleanupPending: false } });
+    expect(order).toEqual(['delete', 'refresh']);
+  });
+
+  it('does not refresh the catalog when creating apps that start archived', async () => {
+    const refreshCatalog = vi.fn();
+
+    await createApp(appForm(), catalogDependencies({ refreshCatalog }));
+    await expect(
+      createQuickApp(
+        {
+          title: 'Çağrı Öz',
+          shortDescription: 'Yeni uygulama için yeterli kısa açıklama.',
+        },
+        catalogDependencies({ refreshCatalog }),
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(refreshCatalog).not.toHaveBeenCalled();
+  });
+
+  it('treats a throwing catalog refresh as a warning instead of a failure', async () => {
+    const result = await setAppPublicationStatus(appId, 'active', lifecycleDependencies({
+      refreshCatalog: vi.fn(async () => {
+        throw new Error('raw refresh failure');
+      }),
+    }));
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { id: appId, status: 'active', catalogWarning: { code: 'TEMPORARY' } },
+    });
+    expect(JSON.stringify(result)).not.toContain('raw refresh failure');
+  });
+});
+
 describe('asset upload intents', () => {
   it('authorizes first, validates image MIME/10 MiB and generates a server-owned path', async () => {
     const createSignedUpload = vi.fn(async (path: string) => ({
@@ -372,7 +527,7 @@ describe('asset upload intents', () => {
   });
 
   it('cleans only a canonical app asset under the supplied publishing operation', async () => {
-    const cleanupAssets = vi.fn(async () => ({ pending: 0 }));
+    const cleanupAssets = vi.fn(async () => ({ queued: 0, alreadyQueued: 0, enqueueFailures: 0, auditFailures: 0 }));
     const dependencies: PublishingAssetCleanupDependencies = {
       authorize: vi.fn(async () => ({ userId: actorId })),
       cleanupAssets,
@@ -381,16 +536,31 @@ describe('asset upload intents', () => {
 
     await expect(cleanupPublishingAsset({
       appId,
-      operationId,
+      requestId: operationId,
       path,
       kind: 'screenshot',
     }, dependencies)).resolves.toEqual({ ok: true, data: { cleanupPending: false } });
     expect(cleanupAssets).toHaveBeenCalledWith([{
       bucket: 'app-assets',
       path,
-      operationId,
+      assetId: versionId,
       targetType: 'screenshot',
     }]);
+  });
+
+  it('reports cleanup pending when the asset queue rejects the object', async () => {
+    const dependencies: PublishingAssetCleanupDependencies = {
+      authorize: vi.fn(async () => ({ userId: actorId })),
+      cleanupAssets: vi.fn(async () => ({ queued: 0, alreadyQueued: 0, enqueueFailures: 1, auditFailures: 0 })),
+    };
+    const path = `apps/${appId}/screenshots/${versionId}.webp`;
+
+    await expect(cleanupPublishingAsset({
+      appId,
+      requestId: operationId,
+      path,
+      kind: 'screenshot',
+    }, dependencies)).resolves.toEqual({ ok: true, data: { cleanupPending: true } });
   });
 
   it('rejects an unrelated publishing asset before Storage cleanup', async () => {
@@ -402,7 +572,7 @@ describe('asset upload intents', () => {
 
     const result = await cleanupPublishingAsset({
       appId,
-      operationId,
+      requestId: operationId,
       path: `apps/a9000000-0000-4000-8000-000000000001/icons/${versionId}.png`,
       kind: 'icon',
     }, dependencies);
@@ -445,7 +615,7 @@ describe('app lifecycle actions', () => {
   });
 
   it('runs managed asset cleanup only after the delete transaction succeeds', async () => {
-    const cleanupAssets = vi.fn(async () => ({ pending: 0 }));
+    const cleanupAssets = vi.fn(async () => ({ queued: 0, alreadyQueued: 0, enqueueFailures: 0, auditFailures: 0 }));
     const deleteRpc = vi.fn(async () => ({
       data: [
         { bucket: 'app-assets', path: `apps/${appId}/icons/${versionId}.png` },
@@ -463,8 +633,8 @@ describe('app lifecycle actions', () => {
     expect(result).toEqual({ ok: true, data: { deleted: true, cleanupPending: false } });
     expect(deleteRpc).toHaveBeenCalledWith(actorId, appId, 'Örnek Uygulama');
     expect(cleanupAssets).toHaveBeenCalledWith([
-      { bucket: 'app-assets', path: `apps/${appId}/icons/${versionId}.png`, operationId: versionId, targetType: 'icon' },
-      { bucket: 'apks', path: `apps/${appId}/versions/${versionId}.apk`, operationId: versionId, targetType: 'apk' },
+      { bucket: 'app-assets', path: `apps/${appId}/icons/${versionId}.png`, assetId: versionId, targetType: 'icon' },
+      { bucket: 'apks', path: `apps/${appId}/versions/${versionId}.apk`, assetId: versionId, targetType: 'apk' },
     ]);
   });
 
@@ -490,5 +660,17 @@ describe('app lifecycle actions', () => {
 
     expect(result).toEqual({ ok: true, data: { deleted: true, cleanupPending: true } });
     expect(JSON.stringify(result)).not.toContain('raw storage failure');
+  });
+
+  it('reports cleanup pending when the queue rejects the assets', async () => {
+    const result = await deleteAppPermanently(appId, 'Örnek Uygulama', lifecycleDependencies({
+      deleteRpc: vi.fn(async () => ({
+        data: [{ bucket: 'apks', path: `apps/${appId}/versions/${versionId}.apk` }],
+        error: null,
+      })),
+      cleanupAssets: vi.fn(async () => ({ queued: 0, alreadyQueued: 0, enqueueFailures: 1, auditFailures: 0 })),
+    }));
+
+    expect(result).toEqual({ ok: true, data: { deleted: true, cleanupPending: true } });
   });
 });

@@ -1,16 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { ActionException } from '../../server/errors/action-error';
+import type { VerifiedApk } from './apk-verification';
 import {
   createUploadIntent,
   finalizeUpload,
   type UploadActionDependencies,
 } from './upload-actions';
 import { startTusUpload, type TusUploadConstructor } from './tus-upload';
-import { operationPath } from './upload-schema';
+import { HOSTED_STORAGE_MAX_BYTES, operationPath } from './upload-schema';
 
 const actorId = 'a1000000-0000-4000-8000-000000000001';
 const appId = 'a2000000-0000-4000-8000-000000000001';
 const operationId = 'a3000000-0000-4000-8000-000000000001';
+const draftPath = `operations/${operationId}/source.apk`;
 
 const finalizeInput = {
   source: 'storage' as const,
@@ -27,6 +30,15 @@ const finalizeInput = {
   accountRequirement: 'optional' as const,
 };
 
+const verifiedFile: VerifiedApk = Object.freeze({
+  manifest: Object.freeze({
+    packageName: 'com.example.release',
+    versionName: '1.0.0',
+    versionCode: 1,
+  }),
+  sha256: 'a'.repeat(64),
+});
+
 function dependencies(overrides: Partial<UploadActionDependencies> = {}): UploadActionDependencies {
   return {
     authorize: vi.fn(async () => ({ userId: actorId })),
@@ -34,7 +46,8 @@ function dependencies(overrides: Partial<UploadActionDependencies> = {}): Upload
     createId: () => operationId,
     signUpload: vi.fn(async path => ({ data: { path, token: 'token' }, error: null })),
     inspectObject: vi.fn(async () => ({ size: 1024, mimeType: 'application/vnd.android.package-archive' })),
-    readMagic: vi.fn(async () => new Uint8Array([0x50, 0x4b])),
+    verifyApk: vi.fn(async () => verifiedFile),
+    cleanupDraft: vi.fn(async () => undefined),
     createDraft: vi.fn(async input => ({ data: { id: input.versionId }, error: null })),
     recordAudit: vi.fn(async () => ({ error: null })),
     ...overrides,
@@ -42,13 +55,6 @@ function dependencies(overrides: Partial<UploadActionDependencies> = {}): Upload
 }
 
 describe('APK upload contracts', () => {
-  it('accepts the current ApkStep Storage payload until Task 6 migrates callers', async () => {
-    const result = await finalizeUpload(finalizeInput, dependencies());
-
-    expect(result).toMatchObject({ ok: true });
-    expect(dependencies().createDraft).not.toHaveBeenCalled();
-  });
-
   it('persists release metadata in the Storage draft and audits only safe fields', async () => {
     const deps = dependencies();
     const result = await finalizeUpload(finalizeInput, deps);
@@ -142,19 +148,181 @@ describe('APK upload contracts', () => {
   });
 
   it.each([
-    { name: 'non-PK magic', inspect: { size: 1024, mimeType: 'application/octet-stream' }, magic: [0, 0] },
-    { name: 'mismatched size', inspect: { size: 2048, mimeType: 'application/octet-stream' }, magic: [0x50, 0x4b] },
-  ])('rejects $name during finalize', async ({ inspect, magic }) => {
+    { name: 'unsupported MIME type', inspect: { size: 1024, mimeType: 'text/plain' } },
+    { name: 'mismatched size', inspect: { size: 2048, mimeType: 'application/octet-stream' } },
+  ])('rejects $name during finalize', async ({ inspect }) => {
     const createDraft = vi.fn();
+    const cleanupDraft = vi.fn(async () => undefined);
     const result = await finalizeUpload(
       finalizeInput,
       dependencies({
         inspectObject: vi.fn(async () => inspect),
-        readMagic: vi.fn(async () => new Uint8Array(magic)),
         createDraft,
+        cleanupDraft,
       }),
     );
     expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
     expect(createDraft).not.toHaveBeenCalled();
+    expect(cleanupDraft).toHaveBeenCalledWith(draftPath);
+  });
+
+  it('rejects a missing storage object and cleans up the operation path', async () => {
+    const cleanupDraft = vi.fn(async () => undefined);
+    const result = await finalizeUpload(
+      finalizeInput,
+      dependencies({ inspectObject: vi.fn(async () => null), cleanupDraft }),
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    expect(cleanupDraft).toHaveBeenCalledWith(draftPath);
+  });
+});
+
+describe('finalizeUpload APK verification', () => {
+  it('persists the identity and digest verified from the file', async () => {
+    const deps = dependencies();
+
+    const result = await finalizeUpload(finalizeInput, deps);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(deps.verifyApk).toHaveBeenCalledWith(draftPath, 1024);
+    expect(deps.createDraft).toHaveBeenCalledWith(expect.objectContaining({
+      packageName: verifiedFile.manifest.packageName,
+      versionName: verifiedFile.manifest.versionName,
+      versionCode: verifiedFile.manifest.versionCode,
+      sha256: verifiedFile.sha256,
+    }));
+    expect(deps.cleanupDraft).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['packageName', { packageName: 'com.example.fake' }],
+    ['versionName', { versionName: '9.9.9' }],
+    ['versionCode', { versionCode: 999 }],
+    ['sha256', { sha256: 'b'.repeat(64) }],
+  ] as const)('rejects a client-declared %s that differs from the file', async (_, override) => {
+    const cleanupDraft = vi.fn(async () => undefined);
+    const deps = dependencies({ cleanupDraft });
+
+    const result = await finalizeUpload({ ...finalizeInput, ...override }, deps);
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    expect(deps.createDraft).not.toHaveBeenCalled();
+    expect(cleanupDraft).toHaveBeenCalledWith(draftPath);
+  });
+
+  it('rejects an object above 50 MB before verifying it', async () => {
+    const verifyApk = vi.fn(async () => verifiedFile);
+    const cleanupDraft = vi.fn(async () => undefined);
+
+    const result = await finalizeUpload(
+      finalizeInput,
+      dependencies({
+        inspectObject: vi.fn(async () => ({
+          size: HOSTED_STORAGE_MAX_BYTES + 1,
+          mimeType: 'application/vnd.android.package-archive',
+        })),
+        verifyApk,
+        cleanupDraft,
+      }),
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    expect(verifyApk).not.toHaveBeenCalled();
+    expect(cleanupDraft).toHaveBeenCalledWith(draftPath);
+  });
+
+  it('cleans up when verification fails temporarily', async () => {
+    const cleanupDraft = vi.fn(async () => undefined);
+    const deps = dependencies({
+      verifyApk: vi.fn(async () => {
+        throw new ActionException('TEMPORARY');
+      }),
+      cleanupDraft,
+    });
+
+    const result = await finalizeUpload(finalizeInput, deps);
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'TEMPORARY' } });
+    expect(deps.createDraft).not.toHaveBeenCalled();
+    expect(cleanupDraft).toHaveBeenCalledWith(draftPath);
+  });
+
+  it('keeps the draft object when the insert conflicts with an existing draft', async () => {
+    const cleanupDraft = vi.fn(async () => undefined);
+    const deps = dependencies({
+      createDraft: vi.fn(async () => ({ data: null, error: { code: '23505' } })),
+      cleanupDraft,
+    });
+
+    const result = await finalizeUpload(finalizeInput, deps);
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    // A replay of a finalize that already succeeded hits the unique
+    // (app_id, version_code) key; the existing draft still needs this object.
+    expect(cleanupDraft).not.toHaveBeenCalled();
+  });
+
+  it('still cleans up when the insert fails with a non-duplicate 409', async () => {
+    const cleanupDraft = vi.fn(async () => undefined);
+    const deps = dependencies({
+      // A foreign-key violation can come back with a 409 status, but no
+      // existing draft owns this object, so the upload must not be left behind.
+      createDraft: vi.fn(async () => ({ data: null, error: { code: '23503', status: 409 } })),
+      cleanupDraft,
+    });
+
+    const result = await finalizeUpload(finalizeInput, deps);
+
+    expect(result).toMatchObject({ ok: false });
+    expect(cleanupDraft).toHaveBeenCalledWith(draftPath);
+  });
+
+  it('never deletes the draft object after a successful insert', async () => {
+    const deps = dependencies();
+
+    const result = await finalizeUpload(finalizeInput, deps);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(deps.cleanupDraft).not.toHaveBeenCalled();
+  });
+
+  it('keeps the object when the audit fails after the row exists', async () => {
+    const cleanupDraft = vi.fn(async () => undefined);
+    const deps = dependencies({
+      recordAudit: vi.fn(async () => ({ error: new Error('audit unavailable') })),
+      cleanupDraft,
+    });
+
+    const result = await finalizeUpload(finalizeInput, deps);
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'TEMPORARY' } });
+    expect(cleanupDraft).not.toHaveBeenCalled();
+  });
+
+  it('does not delete storage when the payload fails schema validation', async () => {
+    const cleanupDraft = vi.fn(async () => undefined);
+
+    const result = await finalizeUpload(
+      { ...finalizeInput, size: HOSTED_STORAGE_MAX_BYTES + 1 },
+      dependencies({ cleanupDraft }),
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    // The operation id is only a path guess at this point; it may name another
+    // operation's object, so a rejected payload must not delete anything.
+    expect(cleanupDraft).not.toHaveBeenCalled();
+  });
+
+  it('does not clean up when the rejected payload has no valid operation path', async () => {
+    const cleanupDraft = vi.fn(async () => undefined);
+
+    const result = await finalizeUpload(
+      { ...finalizeInput, operationId: '../other', size: HOSTED_STORAGE_MAX_BYTES + 1 },
+      dependencies({ cleanupDraft }),
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    expect(cleanupDraft).not.toHaveBeenCalled();
   });
 });

@@ -3,11 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-import type { Json } from '../../types/database.types';
 import { requireAdmin } from '../../server/auth/require-admin';
 import type { ActionError, ActionResult } from '../../server/errors/action-error';
 import { ActionException, toActionError } from '../../server/errors/action-error';
-import { removeOrEnqueueAssets, type CleanupAsset } from '../uploads/asset-cleanup';
+import { enqueueCleanupAssets, type CleanupAsset, type CleanupOutcome } from '../uploads/asset-cleanup';
+import { enqueueCleanupAndAudit } from '../uploads/cleanup-enqueue';
 import {
   parseAppFormData,
   parseCategoryFormData,
@@ -44,11 +44,13 @@ export type CatalogActionDependencies = Readonly<{
   updateCategory(categoryId: string, input: Readonly<Record<string, unknown>>): Promise<{ error: MutationError }>;
   recordAudit(input: AuditInput): Promise<{ error: MutationError }>;
   revalidate?(path: string): void;
+  refreshCatalog?(): Promise<{ error: ActionError | null }>;
 }>;
 
 export type CatalogMutationData = Readonly<{
   id: string;
   auditWarning?: ActionError;
+  catalogWarning?: ActionError;
 }>;
 
 export type PublishingAppData = Readonly<{
@@ -71,8 +73,16 @@ export type PublishingAppActionDependencies = Readonly<{
 }>;
 
 export type AppPublicationStatus = 'active' | 'archived';
-export type LifecycleMutationData = Readonly<{ id: string; status: AppPublicationStatus }>;
-export type DeleteAppData = Readonly<{ deleted: true; cleanupPending: boolean }>;
+export type LifecycleMutationData = Readonly<{
+  id: string;
+  status: AppPublicationStatus;
+  catalogWarning?: ActionError;
+}>;
+export type DeleteAppData = Readonly<{
+  deleted: true;
+  cleanupPending: boolean;
+  catalogWarning?: ActionError;
+}>;
 
 export type LifecycleActionDependencies = Readonly<{
   authorize(): Promise<Actor>;
@@ -86,8 +96,9 @@ export type LifecycleActionDependencies = Readonly<{
     appId: string,
     confirmationTitle: string,
   ): Promise<{ data: unknown; error: unknown | null }>;
-  cleanupAssets(assets: readonly CleanupAsset[]): Promise<{ pending: number }>;
+  cleanupAssets(assets: readonly CleanupAsset[]): Promise<CleanupOutcome>;
   revalidate?(appId: string): void;
+  refreshCatalog?(): Promise<{ error: ActionError | null }>;
 }>;
 
 function defaultLifecycleDependencies(): LifecycleActionDependencies {
@@ -124,39 +135,13 @@ function defaultLifecycleDependencies(): LifecycleActionDependencies {
     },
     async cleanupAssets(assets) {
       const db = await database();
-      return removeOrEnqueueAssets(assets, {
-        async remove(bucket, path) {
-          return db.storage.from(bucket).remove([path]);
-        },
+      return enqueueCleanupAssets(assets, {
         async enqueue(asset) {
-          const queued = await db.from('admin_asset_cleanup_jobs').insert({
-            bucket: asset.bucket,
-            path: asset.path,
-            operation_id: asset.operationId,
-            target_type: asset.targetType,
-            last_error_at: new Date().toISOString(),
+          return enqueueCleanupAndAudit(db, {
+            actorId: (await authorize()).userId,
+            asset,
+            auditAction: 'asset.cleanup_pending',
           });
-          if (queued.error) return { error: queued.error };
-          const audit = await db.rpc('admin_record_external_action', {
-            p_actor_id: (await authorize()).userId,
-            p_action: 'asset.cleanup_pending',
-            p_target_type: 'asset',
-            p_target_id: asset.operationId,
-            p_metadata: {
-              bucket: asset.bucket,
-              path: asset.path,
-              operation_id: asset.operationId,
-            } as Json,
-          });
-          return { error: audit.error };
-        },
-        async complete(asset) {
-          return db
-            .from('admin_asset_cleanup_jobs')
-            .update({ completed_at: new Date().toISOString() })
-            .eq('bucket', asset.bucket)
-            .eq('path', asset.path)
-            .is('completed_at', null);
         },
       });
     },
@@ -164,6 +149,10 @@ function defaultLifecycleDependencies(): LifecycleActionDependencies {
       revalidatePath('/');
       revalidatePath('/apps');
       revalidatePath(`/apps/${appId}`);
+    },
+    async refreshCatalog() {
+      const { createCatalogRefreshAction } = await import('../catalog/catalog-json');
+      return createCatalogRefreshAction(authorize)();
     },
   };
 }
@@ -182,14 +171,14 @@ function cleanupAssetsFromDeleteResult(value: unknown, appId: string): CleanupAs
     if (typeof path !== 'string') throw new ActionException('INTERNAL');
     const apkMatch = bucket === 'apks' ? apk.exec(path) : null;
     if (apkMatch) {
-      return { bucket: 'apks', path, operationId: apkMatch[1], targetType: 'apk' };
+      return { bucket: 'apks', path, assetId: apkMatch[1], targetType: 'apk' };
     }
     const imageMatch = bucket === 'app-assets' ? image.exec(path) : null;
     if (!imageMatch) throw new ActionException('INTERNAL');
     return {
       bucket: 'app-assets',
       path,
-      operationId: imageMatch[2],
+      assetId: imageMatch[2],
       targetType: imageMatch[1] === 'icons' ? 'icon' : 'screenshot',
     };
   });
@@ -207,7 +196,11 @@ export async function setAppPublicationStatus(
     const result = await dependencies.setStatusRpc(actor.userId, id, nextStatus);
     if (result.error) throw result.error;
     dependencies.revalidate?.(id);
-    return { ok: true, data: { id, status: nextStatus } };
+    const catalogWarning = await refreshCatalogWarning(dependencies.refreshCatalog);
+    return {
+      ok: true,
+      data: { id, status: nextStatus, ...(catalogWarning ? { catalogWarning } : {}) },
+    };
   } catch (error) {
     return {
       ok: false,
@@ -232,12 +225,16 @@ export async function deleteAppPermanently(
     try {
       const assets = cleanupAssetsFromDeleteResult(result.data, id);
       const cleanup = await dependencies.cleanupAssets(assets);
-      cleanupPending = cleanup.pending > 0;
+      cleanupPending = cleanup.queued > 0 || cleanup.enqueueFailures > 0;
     } catch {
       cleanupPending = true;
     }
     dependencies.revalidate?.(id);
-    return { ok: true, data: { deleted: true, cleanupPending } };
+    const catalogWarning = await refreshCatalogWarning(dependencies.refreshCatalog);
+    return {
+      ok: true,
+      data: { deleted: true, cleanupPending, ...(catalogWarning ? { catalogWarning } : {}) },
+    };
   } catch (error) {
     return {
       ok: false,
@@ -318,6 +315,20 @@ function defaultDependencies(): CatalogActionDependencies {
       });
     },
     revalidate: revalidatePath,
+    async refreshCatalog() {
+      const { createCatalogRefreshAction } = await import('../catalog/catalog-json');
+      const record = async (input: AuditInput) => {
+        const db = await database();
+        return db.rpc('admin_record_external_action', {
+          p_actor_id: input.actorId,
+          p_action: input.action,
+          p_target_type: input.targetType,
+          p_target_id: input.targetId,
+          p_metadata: input.metadata,
+        });
+      };
+      return createCatalogRefreshAction(authorize, record)();
+    },
   };
 }
 
@@ -386,6 +397,18 @@ async function auditMutation(
 ): Promise<ActionError | undefined> {
   const audit = await dependencies.recordAudit(input);
   return audit.error ? toActionError(new ActionException('TEMPORARY')) : undefined;
+}
+
+async function refreshCatalogWarning(
+  refreshCatalog: (() => Promise<{ error: ActionError | null }>) | undefined,
+): Promise<ActionError | undefined> {
+  if (!refreshCatalog) return undefined;
+  try {
+    const result = await refreshCatalog();
+    return result.error ?? undefined;
+  } catch {
+    return toActionError(new ActionException('TEMPORARY'));
+  }
 }
 
 export async function createApp(
@@ -497,7 +520,15 @@ export async function updateApp(
       metadata: {},
     });
     dependencies.revalidate?.(`/apps/${id}`);
-    return { ok: true, data: { id, ...(auditWarning ? { auditWarning } : {}) } };
+    const catalogWarning = await refreshCatalogWarning(dependencies.refreshCatalog);
+    return {
+      ok: true,
+      data: {
+        id,
+        ...(auditWarning ? { auditWarning } : {}),
+        ...(catalogWarning ? { catalogWarning } : {}),
+      },
+    };
   } catch (error) {
     return {
       ok: false,
@@ -591,7 +622,15 @@ export async function createCategory(
     });
     dependencies.revalidate?.('/apps');
     dependencies.revalidate?.('/settings');
-    return { ok: true, data: { id: insert.data.id, ...(auditWarning ? { auditWarning } : {}) } };
+    const catalogWarning = await refreshCatalogWarning(dependencies.refreshCatalog);
+    return {
+      ok: true,
+      data: {
+        id: insert.data.id,
+        ...(auditWarning ? { auditWarning } : {}),
+        ...(catalogWarning ? { catalogWarning } : {}),
+      },
+    };
   } catch (error) {
     return {
       ok: false,
@@ -628,7 +667,15 @@ export async function updateCategory(
     });
     dependencies.revalidate?.('/apps');
     dependencies.revalidate?.('/settings');
-    return { ok: true, data: { id, ...(auditWarning ? { auditWarning } : {}) } };
+    const catalogWarning = await refreshCatalogWarning(dependencies.refreshCatalog);
+    return {
+      ok: true,
+      data: {
+        id,
+        ...(auditWarning ? { auditWarning } : {}),
+        ...(catalogWarning ? { catalogWarning } : {}),
+      },
+    };
   } catch (error) {
     return {
       ok: false,

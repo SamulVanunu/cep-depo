@@ -3,11 +3,27 @@
 import type { ActionResult } from '../../server/errors/action-error';
 import { ActionException, toActionError } from '../../server/errors/action-error';
 import { requireAdmin } from '../../server/auth/require-admin';
-import { operationPath } from './upload-schema';
+import { managedTarget } from './cleanup-paths';
+import { enqueueCleanupAndAudit } from './cleanup-enqueue';
 
-export async function cleanupOrphanUploadAction(path: string): Promise<ActionResult<null>> {
+export type OrphanCleanupData = Readonly<{
+  /** True when a pending cleanup job for this draft already existed. */
+  deduped: boolean;
+  /** True when the object is queued but its actor-facing audit row is missing. */
+  auditPending: boolean;
+}>;
+
+/**
+ * Queues an unreferenced upload draft for the cleanup worker. The Storage
+ * object is not deleted here: the tombstone created by the enqueue blocks new
+ * references, and the worker deletes the object later.
+ */
+export async function cleanupOrphanUploadAction(
+  path: string,
+): Promise<ActionResult<OrphanCleanupData>> {
   try {
-    if (!operationPath.test(path)) throw new ActionException('VALIDATION');
+    const target = managedTarget('apk-drafts', path, 'apk_draft');
+    if (!target) throw new ActionException('VALIDATION');
     const identity = await requireAdmin(undefined, { mutation: true });
     const { getAdminClient } = await import('../../server/supabase/admin-client');
     const client = getAdminClient(identity);
@@ -19,17 +35,23 @@ export async function cleanupOrphanUploadAction(path: string): Promise<ActionRes
       .limit(1);
     if (references.error) throw references.error;
     if (references.data.length) throw new ActionException('CONFLICT');
-    const removal = await client.storage.from('apk-drafts').remove([path]);
-    if (removal.error) throw removal.error;
-    const audit = await client.rpc('admin_record_external_action', {
-      p_actor_id: identity.userId,
-      p_action: 'upload.cleanup',
-      p_target_type: 'upload',
-      p_target_id: path,
-      p_metadata: { bucket: 'apk-drafts', path },
+    const queued = await enqueueCleanupAndAudit(client, {
+      actorId: identity.userId,
+      asset: {
+        bucket: 'apk-drafts',
+        path: target.path,
+        assetId: target.assetId,
+        targetType: 'apk_draft',
+      },
+      auditAction: 'upload.cleanup',
     });
-    if (audit.error) throw audit.error;
-    return { ok: true, data: null };
+    // The tombstone is the deletion fact. An audit failure only leaves the
+    // actor-facing row missing; it must not report a queued cleanup as failed.
+    if (!queued.queued) throw queued.enqueueError ?? new ActionException('TEMPORARY');
+    return {
+      ok: true,
+      data: { deduped: queued.deduped, auditPending: queued.audit === 'failed' },
+    };
   } catch (error) {
     return { ok: false, error: toActionError(error) };
   }

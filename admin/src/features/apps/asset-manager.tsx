@@ -27,7 +27,7 @@ export function AssetManager({ appId, iconPath, screenshotCount }: Readonly<{
     altText = '',
     form?: HTMLFormElement,
   ) {
-    const operationId = crypto.randomUUID();
+    const requestId = crypto.randomUUID();
     setPending(true);
     setMessage(null);
     const intent = await requestAssetUploadAction({
@@ -69,7 +69,7 @@ export function AssetManager({ appId, iconPath, screenshotCount }: Readonly<{
     } else {
       await cleanupPublishingAssetAction({
         appId,
-        operationId,
+        requestId,
         path: intent.data.path,
         kind,
       });

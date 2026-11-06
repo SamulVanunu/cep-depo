@@ -24,6 +24,7 @@ import {
 } from '../versions/version-actions';
 import { ApkStep, type ApkStepDependencies } from './apk-step';
 import { AppStep } from './app-step';
+import { createPublishOperationTracker } from './publish-operation-id';
 import type { PublishReview, PublishWizardState, SelectedPublishApp } from './publish-types';
 
 type PublishWizardProps = Readonly<{
@@ -68,7 +69,7 @@ async function uploadPublishingAsset(input: Readonly<{
   if (uploaded.error) {
     await cleanupPublishingAssetAction({
       appId: input.appId,
-      operationId: input.operationId,
+      requestId: input.operationId,
       path: intent.data.path,
       kind: input.kind,
     });
@@ -85,7 +86,7 @@ async function uploadPublishingAsset(input: Readonly<{
   if (!saved.ok) {
     await cleanupPublishingAssetAction({
       appId: input.appId,
-      operationId: input.operationId,
+      requestId: input.operationId,
       path: intent.data.path,
       kind: input.kind,
     });
@@ -122,12 +123,34 @@ export function PublishWizard({
     cleanupPending: false,
   });
   const publishingRef = useRef(false);
+  const operationTrackerRef = useRef<ReturnType<typeof createPublishOperationTracker> | null>(
+    null,
+  );
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [cleanupPending, setCleanupPending] = useState(false);
+  const [catalogWarning, setCatalogWarning] = useState<string | null>(null);
+  // Remounts the APK step after a failed publish so the review can be retried:
+  // that step hides its submit button once a review is complete, and the
+  // operation id is only useful if the same publication can actually be tried
+  // again.
+  const [apkAttempt, setApkAttempt] = useState(0);
 
   function continueWithApp(app: SelectedPublishApp) {
     setState(current => ({ ...current, step: 'apk', app }));
+  }
+
+  /**
+   * A10.36 S7.1: one catalog operation id per publication, minted in the
+   * browser and reused on every retry of the same review/version. A
+   * server-action-local value cannot do this: an HTTP retry is a new
+   * invocation, so the id must travel as an argument.
+   */
+  function catalogOperation() {
+    operationTrackerRef.current ??= createPublishOperationTracker(() =>
+      crypto.randomUUID(),
+    );
+    return operationTrackerRef.current;
   }
 
   async function publish(review: PublishReview, app: SelectedPublishApp) {
@@ -136,33 +159,48 @@ export function PublishWizard({
     setPublishing(true);
     setPublishError(null);
     setCleanupPending(false);
+    setCatalogWarning(null);
     try {
       const publishFn = publishVersionReplacingPrevious ?? publishVersionReplacingPreviousAction;
-      const result = await publishFn(review.versionId);
+      // The review's version is the publication identity: the same version
+      // keeps its id on every retry, a new version starts a new operation.
+      const operationId = catalogOperation().start(review.versionId);
+      const result = await publishFn(review.versionId, operationId);
       if (!result.ok) {
         setPublishError(result.error.message);
+        setApkAttempt(attempt => attempt + 1);
         if (app.isNew) {
           try {
             await compensateNewApp({ id: app.id, title: app.title, operationId: app.operationId ?? '' });
           } catch {
             // Compensation owns safe error reporting.
           }
+          // A new app means a new publication; do not carry this id into it.
+          catalogOperation().finish();
           setState({ step: 'app', app: null, review: null, cleanupPending: false });
         } else {
           setState(current => ({ ...current, step: 'apk', review: null }));
         }
         return;
       }
+      catalogOperation().finish();
       setCleanupPending(Boolean(result.data?.cleanupPending));
+      setCatalogWarning(
+        result.data?.catalogWarning
+          ? 'Yayın tamamlandı; public katalog JSON dosyaları yenilenemedi. Katalog kısa süre önceki hâlinde kalabilir.'
+          : null,
+      );
       setState(current => ({ ...current, step: 'complete', app: current.app ?? app, review, cleanupPending: Boolean(result.data?.cleanupPending) }));
     } catch {
       setPublishError('Yayınlama tamamlanamadı. Lütfen yeniden dene.');
+      setApkAttempt(attempt => attempt + 1);
       if (app.isNew) {
         try {
           await compensateNewApp({ id: app.id, title: app.title, operationId: app.operationId ?? '' });
         } catch {
           // Compensation owns safe error reporting.
         }
+        catalogOperation().finish();
         setState({ step: 'app', app: null, review: null, cleanupPending: false });
       } else {
         setState(current => ({ ...current, step: 'apk', review: null }));
@@ -208,6 +246,7 @@ export function PublishWizard({
         <ApkStep
           app={state.app!}
           dependencies={apkDependencies}
+          key={apkAttempt}
           onComplete={handleApkComplete}
         />
       ) : null}
@@ -247,8 +286,9 @@ export function PublishWizard({
             </section>
           ) : null}
           {cleanupPending ? (
-            <p role="status">Yayın tamamlandı; bazı dosyalar temizleme bekliyor.</p>
+            <p role="status">Yayın tamamlandı; bazı dosyalar temizlik kuyruğunda bekliyor.</p>
           ) : null}
+          {catalogWarning ? <p role="status">{catalogWarning}</p> : null}
           <div className="button-row">
             <Link className="primary-button" href={`/apps/${state.app.id}`}>Uygulamayı yönet</Link>
             <Link className="secondary-button" href="/apps">Uygulamalara dön</Link>

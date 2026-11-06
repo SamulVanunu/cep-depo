@@ -37,6 +37,8 @@ describe('getServerEnv', () => {
       adminReadOnly: true,
       authEmailEnabled: false,
       externalApkPublishingEnabled: false,
+      cleanupWorkerSecret: null,
+      cronSecret: null,
     });
   });
 
@@ -50,6 +52,29 @@ describe('getServerEnv', () => {
     expect(getServerEnv({ ...base, EXTERNAL_APK_PUBLISHING_ENABLED: 'false' }).externalApkPublishingEnabled).toBe(false);
     expect(() => getServerEnv({ ...base, EXTERNAL_APK_PUBLISHING_ENABLED: 'yes' })).toThrow(
       'EXTERNAL_APK_PUBLISHING_ENABLED',
+    );
+  });
+
+  it('treats cleanup secrets as optional only when unset or blank', () => {
+    const base = {
+      ...validPublicEnv,
+      NEXT_PUBLIC_SITE_URL: 'https://admin.example.com',
+      SUPABASE_SECRET_KEY: 'sb_secret_example',
+    };
+
+    expect(getServerEnv({ ...base, CLEANUP_WORKER_SECRET: '', CRON_SECRET: '   ' })).toMatchObject({
+      cleanupWorkerSecret: null,
+      cronSecret: null,
+    });
+    expect(
+      getServerEnv({
+        ...base,
+        CLEANUP_WORKER_SECRET: 'w'.repeat(32),
+        CRON_SECRET: 'c'.repeat(32),
+      }),
+    ).toMatchObject({ cleanupWorkerSecret: 'w'.repeat(32), cronSecret: 'c'.repeat(32) });
+    expect(() => getServerEnv({ ...base, CLEANUP_WORKER_SECRET: 'too-short' })).toThrow(
+      'CLEANUP_WORKER_SECRET',
     );
   });
 
