@@ -7,7 +7,9 @@ Next.js yönetim panelinin kurulum ve ortam değişkenleri için repository kök
 Yayınlama için oturum açan hesabın `admin` rolü olmalıdır. `/publish` adresindeki iki adımlı akış kullanılır:
 
 1. Mevcut uygulamayı seçin veya yeni uygulamanın ad, slug, kategori, kısa açıklama, ayrıntılı açıklama ve zorunlu ilk ikonunu girin. Ekran görüntüleri isteğe bağlıdır; eklenen her ekran görüntüsü için erişilebilir alt metin zorunludur. Yeni kayıt, ilk APK başarıyla yayınlanana kadar public katalogda görünmez.
-2. APK kaynağını seçin ve isteğe bağlı değişiklik notunu girin. Paket adı, sürüm adı ve pozitif sürüm kodu APK manifestinden salt okunur olarak çıkarılır; elle girilemez. **APK'yı yükle ve yayınla** işlemi kaynağı doğrular ve başarılıysa ayrıca bir taslak inceleme/yayın adımı göstermeden kataloğa yayınlar.
+2. APK kaynağını seçin, desteklenen cihazları (**Mobil**, **TV** veya ikisi) ve hesap gereksinimini (**Gerekmez**, **İsteğe bağlı**, **Zorunlu**) belirleyin; isteğe bağlı değişiklik notunu girin. En az bir cihaz türü zorunludur. Paket adı, sürüm adı ve pozitif sürüm kodu APK manifestinden salt okunur olarak çıkarılır; elle girilemez. **APK'yı yükle ve yayınla** işlemi kaynağı doğrular ve başarılıysa ayrıca bir taslak inceleme/yayın adımı göstermeden kataloğa yayınlar.
+
+Bu alanlar uygulama değil APK sürümü düzeyindedir. Mevcut uygulamada en yüksek `versionCode` değerli yayımlanmış sürüm form varsayılanlarını sağlar; taslak sürümler dikkate alınmaz. Migration öncesindeki tek-APK kayıtları `Mobil=true`, `TV=false`, `Hesap gerekmez` varsayılanlarıyla çalışmaya devam eder. Katalogdaki platform filtresi yalnız en güncel yayımlanmış sürümü değerlendirir.
 
 `50.000.000` bayta kadar APK dosyası Supabase Storage'a resumable olarak yüklenebilir. Daha büyük dosyalar veya isteğe bağlı harici dağıtım için aynı APK'nın yerel kopyasını seçip kalıcı, kimlik doğrulamasız ve doğrudan APK döndüren public HTTPS bağlantısını girin. Query string, fragment, kullanıcı adı/parola, localhost ve private ağ adresleri kabul edilmez. Mega/TeraBox gibi indirme sayfaları desteklenmez. Panel yerel dosyanın ZIP/manifest yapısını, byte boyutunu ve SHA-256 özetini doğrular. Aktif işlem iptal edilebilir; hata sonrasında yeniden denenebilir.
 
@@ -23,6 +25,7 @@ Yönetim sayfasındaki **Yayından kaldır** uygulamayı katalogdan gizler, veri
 
 ## Operasyon sınırları
 
+- Hosted migration dry-run öncesinde `apps.package_name` değerlerinin benzersiz olduğu doğrulanmalıdır. Migration'ın preflight kontrolü bir çakışma bulursa işlemi durdurur; canlı kayıtlar otomatik birleştirilmez veya silinmez.
 - Yerel testlerin geçmesi hosted Supabase migration izni değildir. Hosted migration için hedef proje, dry-run ve geri dönüş planı incelendikten sonra ayrıca açık onay gerekir.
 - Production veya preview deployment da ayrı açık onay gerektirir. Yerel doğrulama deployment başlatmaz.
 - EAS build, artifact dağıtımı ve harici APK rollout'u birbirinden ayrı açık onaylar gerektirir.
