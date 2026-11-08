@@ -15,6 +15,9 @@ export type LauncherIcon = Readonly<{
 /** Tek ikon dosyası için üst sınır. */
 export const MAX_ICON_BYTES = 2 * 1024 * 1024;
 
+/** Okunacak en fazla aday: bozuk bir APK tarayıcıyı kilitlemesin. */
+export const MAX_ICON_CANDIDATES = 8;
+
 const DENSITIES: Readonly<Record<string, number>> = {
   ldpi: 1,
   mdpi: 2,
@@ -91,7 +94,7 @@ export function iconMimeType(bytes: Uint8Array): 'image/png' | 'image/webp' | nu
 
 export async function extractLauncherIcon(source: ApkByteSource): Promise<LauncherIcon | null> {
   const ranked = rankLauncherIcons(await readZipDirectory(source));
-  for (const entry of ranked) {
+  for (const entry of ranked.slice(0, MAX_ICON_CANDIDATES)) {
     try {
       const bytes = await readZipEntry(source, entry, {
         maxCompressedBytes: MAX_ICON_BYTES,

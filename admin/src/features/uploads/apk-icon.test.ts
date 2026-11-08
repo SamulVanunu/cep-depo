@@ -128,6 +128,19 @@ describe('extractLauncherIcon', () => {
     await expect(extractLauncherIconFromBlob(blob)).resolves.toBeNull();
   });
 
+  it('stops after a bounded number of candidates', async () => {
+    const decoys = Array.from({ length: 12 }, (_unused, index) => ({
+      name: `res/mipmap-xxxhdpi/ic_launcher_${String(index).padStart(2, '0')}.png`,
+      data: new Uint8Array(32),
+    }));
+    const apk = await createApkWithEntries([
+      ...decoys,
+      { name: 'res/mipmap-hdpi/ic_launcher.png', data: png() },
+    ]);
+
+    await expect(extractLauncherIcon(blobByteSource(apk))).resolves.toBeNull();
+  });
+
   it('reads a deflated icon entry', async () => {
     const apk = await createApkWithEntries([
       { name: 'res/mipmap-hdpi/ic_launcher.png', data: png(), method: 8 },

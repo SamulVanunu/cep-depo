@@ -2,9 +2,16 @@ import '@testing-library/jest-dom/vitest';
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PublishAppOption } from '../apps/publish-app-options';
+
+const { refreshCatalogAction } = vi.hoisted(() => ({
+  refreshCatalogAction: vi.fn(async () => ({ error: null })),
+}));
+
+vi.mock('../catalog/catalog-refresh-action', () => ({ refreshCatalogAction }));
+
 import { QuickPublish } from './quick-publish';
 
 const appId = 'a1000000-0000-4000-8000-000000000001';
@@ -107,6 +114,11 @@ function dependencies() {
 const categories = [{ id: categoryId, name: 'Araçlar' }];
 
 describe('QuickPublish', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    refreshCatalogAction.mockClear();
+  });
+
   beforeEach(() => {
     vi.stubGlobal('crypto', {
       ...globalThis.crypto,
@@ -291,5 +303,94 @@ describe('QuickPublish', () => {
 
     expect(await screen.findByText('Yayın tamamlandı')).toBeInTheDocument();
     expect(props.createPublishingApp).toHaveBeenCalledTimes(2);
+  });
+  it('retries the publication without uploading the apk a second time', async () => {
+    const { props, calls } = dependencies();
+    props.publishVersion
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { code: 'TEMPORARY', message: 'Sürüm yayınlanamadı.', correlationId: 'c' },
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { status: 'published', cleanupPending: false },
+      } as never);
+    const user = userEvent.setup();
+    render(
+      <QuickPublish
+        apps={[publishApp({ packageName: 'com.ornek.vizyona' })]}
+        categories={categories}
+        {...props}
+      />,
+    );
+
+    await user.upload(screen.getByLabelText('APK dosyası'), apkFile());
+    await user.click(screen.getByRole('button', { name: 'Yayınla' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sürüm yayınlanamadı.');
+
+    await user.click(screen.getByRole('button', { name: 'Yayınla' }));
+
+    expect(await screen.findByText('Yayın tamamlandı')).toBeInTheDocument();
+    expect(props.startUpload).toHaveBeenCalledTimes(1);
+    expect(props.finalizeUpload).toHaveBeenCalledTimes(1);
+    expect(props.publishVersion).toHaveBeenCalledTimes(2);
+    expect(calls.filter(entry => entry === 'createUploadIntent')).toHaveLength(1);
+  });
+
+  it('shows a Turkish message instead of an internal upload failure slug', async () => {
+    const { props } = dependencies();
+    props.uploadAsset.mockRejectedValueOnce(new Error('asset-upload-failed'));
+    const user = userEvent.setup();
+    render(<QuickPublish apps={[]} categories={categories} {...props} />);
+
+    await user.upload(screen.getByLabelText('APK dosyası'), apkFile());
+    await user.selectOptions(screen.getByLabelText('Kategori'), categoryId);
+    await user.click(screen.getByRole('button', { name: 'Yayınla' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('İkon yüklenemedi');
+    expect(alert).not.toHaveTextContent('asset-upload-failed');
+  });
+
+  it('refreshes the whole catalog when the static json could not be pushed', async () => {
+    const { props } = dependencies();
+    props.publishVersion.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        status: 'published',
+        cleanupPending: false,
+        catalogWarning: { code: 'TEMPORARY', message: 'x', correlationId: 'c' },
+      },
+    } as never);
+    const user = userEvent.setup();
+    render(<QuickPublish apps={[]} categories={categories} {...props} retryCatalog={undefined} />);
+
+    await user.upload(screen.getByLabelText('APK dosyası'), apkFile());
+    await user.selectOptions(screen.getByLabelText('Kategori'), categoryId);
+    await user.click(screen.getByRole('button', { name: 'Yayınla' }));
+    await user.click(await screen.findByRole('button', { name: "Katalog JSON'u yeniden dene" }));
+
+    await waitFor(() => expect(refreshCatalogAction).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: "Katalog JSON'u yeniden dene" })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('revokes the icon preview url when the section unmounts', async () => {
+    const createSpy = vi.fn(() => 'blob:preview');
+    const revokeSpy = vi.fn();
+    vi.stubGlobal('URL', Object.assign(URL, {
+      createObjectURL: createSpy,
+      revokeObjectURL: revokeSpy,
+    }));
+    const { props } = dependencies();
+    const user = userEvent.setup();
+    const { unmount } = render(<QuickPublish apps={[]} categories={categories} {...props} />);
+
+    await user.upload(screen.getByLabelText('APK dosyası'), apkFile());
+    await screen.findByText('Sürüm 1.2.3 (12)');
+    unmount();
+
+    expect(revokeSpy).toHaveBeenCalledWith('blob:preview');
   });
 });

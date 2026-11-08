@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { createPublishingAppAction, deleteAppPermanentlyAction } from '../apps/app-actions';
+import { refreshCatalogAction } from '../catalog/catalog-refresh-action';
 import type { CategoryOption } from '../apps/app-dal';
 import type { PublishAppOption } from '../apps/publish-app-options';
 import { parseApkManifest, type ParsedApkManifest } from '../uploads/apk-manifest';
@@ -47,14 +48,11 @@ type Phase = 'idle' | 'reading' | 'confirm' | 'publishing' | 'done';
 
 type Done = Readonly<{ appId: string; title: string; catalogWarning: boolean }>;
 
-async function retryStaticCatalog(): Promise<boolean> {
-  const response = await fetch('/api/catalog/static-json', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'content-type': 'application/json' },
-    body: '{}',
-  });
-  return response.ok;
+/** A failed publication warning covers the whole catalog refresh, not only the
+ * static mirror, so the retry repeats the same action the publish ran. */
+async function retryCatalogRefresh(): Promise<boolean> {
+  const result = await refreshCatalogAction();
+  return result.error === null;
 }
 
 function newId(): string {
@@ -81,10 +79,23 @@ function releasePreview(url: string | null): void {
   }
 }
 
+const UPLOAD_ERRORS: Readonly<Record<string, string>> = {
+  'asset-intent-failed': 'İkon yüklemesi başlatılamadı. Lütfen yeniden dene.',
+  'asset-upload-failed': 'İkon yüklenemedi. Lütfen yeniden dene.',
+  'asset-save-failed': 'İkon uygulamaya bağlanamadı. Lütfen yeniden dene.',
+};
+
+/** Server actions answer in Turkish; internal upload failures are slugs. */
 function messageOf(error: unknown): string {
-  return error instanceof Error && error.message.length > 0
-    ? error.message
-    : 'APK yayınlanamadı. Lütfen yeniden dene.';
+  if (error instanceof Error && error.message.length > 0) {
+    const mapped = UPLOAD_ERRORS[error.message];
+    if (mapped) return mapped;
+    if (error.message.startsWith('asset-') || error.message.startsWith('tus:')) {
+      return 'Dosya yüklenemedi. Lütfen yeniden dene.';
+    }
+    return error.message;
+  }
+  return 'APK yayınlanamadı. Lütfen yeniden dene.';
 }
 
 const AMBIGUOUS_PACKAGE =
@@ -103,7 +114,7 @@ export function QuickPublish({
   parseApk = parseApkManifest,
   extractIcon = extractLauncherIconFromBlob,
   hash = hashFile,
-  retryCatalog = retryStaticCatalog,
+  retryCatalog = retryCatalogRefresh,
 }: QuickPublishProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [file, setFile] = useState<File | null>(null);
@@ -121,6 +132,7 @@ export function QuickPublish({
   const [progress, setProgress] = useState(0);
   const [createdAppId, setCreatedAppId] = useState<string | null>(null);
   const [createdPackage, setCreatedPackage] = useState<string | null>(null);
+  const [pendingVersionId, setPendingVersionId] = useState<string | null>(null);
   const [done, setDone] = useState<Done | null>(null);
   const [retrying, setRetrying] = useState(false);
 
@@ -128,6 +140,8 @@ export function QuickPublish({
   const busyRef = useRef(false);
   const iconUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => () => releasePreview(iconUrlRef.current), []);
 
   function reset() {
     releasePreview(iconUrlRef.current);
@@ -149,6 +163,7 @@ export function QuickPublish({
     setProgress(0);
     setCreatedAppId(null);
     setCreatedPackage(null);
+    setPendingVersionId(null);
     setDone(null);
     setRetrying(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -173,6 +188,9 @@ export function QuickPublish({
         setCreatedPackage(null);
         iconUploadedRef.current = false;
       }
+      // A different APK is a different publication; never reuse a version
+      // finalized for the file the operator just replaced.
+      setPendingVersionId(null);
       const extracted = await extractIcon(next);
       const packageMatch = matchPackage(parsed.packageName, apps);
 
@@ -236,73 +254,85 @@ export function QuickPublish({
       ? createdAppId
       : (match.kind === 'existing' ? match.app.id : null);
     let created: string | null = null;
+    // A finalized draft cannot be finalized twice: retrying after a publish
+    // failure republishes the version it already created instead of uploading
+    // the APK again and colliding with itself.
+    let versionId = pendingVersionId;
 
     try {
-      if (!appId) {
-        const createdApp = await createPublishingApp({
-          categoryId,
-          slug,
-          title,
-          shortDescription,
-          description,
-          featured: false,
-        });
-        if (!createdApp.ok) throw new Error(createdApp.error.message);
-        appId = createdApp.data.id;
-        created = appId;
-        setCreatedAppId(appId);
-        setCreatedPackage(currentManifest.packageName);
-      }
+      if (versionId === null) {
+        if (!appId) {
+          const createdApp = await createPublishingApp({
+            categoryId,
+            slug,
+            title,
+            shortDescription,
+            description,
+            featured: false,
+          });
+          if (!createdApp.ok) throw new Error(createdApp.error.message);
+          appId = createdApp.data.id;
+          created = appId;
+          setCreatedAppId(appId);
+          setCreatedPackage(currentManifest.packageName);
+        }
 
-      if (icon && !iconUploadedRef.current) {
-        await uploadAsset({
+        if (icon && !iconUploadedRef.current) {
+          await uploadAsset({
+            appId,
+            operationId: newId(),
+            kind: 'icon',
+            file: iconFile(icon),
+            altText: '',
+            position: 0,
+          });
+          iconUploadedRef.current = true;
+        }
+
+        const intent = await createUploadIntent({
           appId,
-          operationId: newId(),
-          kind: 'icon',
-          file: iconFile(icon),
-          altText: '',
-          position: 0,
+          fileName: currentFile.name,
+          mimeType,
+          size: currentFile.size,
         });
-        iconUploadedRef.current = true;
+        if (!intent.ok) throw new Error(intent.error.message);
+
+        await new Promise<void>((resolve, reject) => {
+          void startUploadFn({ ...intent.data, mimeType }, currentFile, {
+            onProgress: (uploaded, total) => {
+              setProgress(total > 0 ? Math.round((uploaded / total) * 100) : 0);
+            },
+            onError: reject,
+            onSuccess: resolve,
+          }).catch(reject);
+        });
+
+        const digest = await hash(currentFile);
+        const finalized = await finalizeUpload({
+          appId,
+          source: 'storage',
+          packageName: currentManifest.packageName,
+          versionName: currentManifest.versionName,
+          versionCode: currentManifest.versionCode,
+          changelog: `${currentManifest.versionName} sürümü.`,
+          operationId: intent.data.operationId,
+          size: currentFile.size,
+          sha256: digest,
+          supportsMobile: true,
+          supportsTv,
+          accountRequirement: 'none',
+        });
+        if (!finalized.ok) throw new Error(finalized.error.message);
+        versionId = finalized.data.id;
+        setPendingVersionId(versionId);
       }
 
-      const intent = await createUploadIntent({
-        appId,
-        fileName: currentFile.name,
-        mimeType,
-        size: currentFile.size,
-      });
-      if (!intent.ok) throw new Error(intent.error.message);
-
-      await new Promise<void>((resolve, reject) => {
-        void startUploadFn({ ...intent.data, mimeType }, currentFile, {
-          onProgress: (uploaded, total) => {
-            setProgress(total > 0 ? Math.round((uploaded / total) * 100) : 0);
-          },
-          onError: reject,
-          onSuccess: resolve,
-        }).catch(reject);
-      });
-
-      const digest = await hash(currentFile);
-      const finalized = await finalizeUpload({
-        appId,
-        source: 'storage',
-        packageName: currentManifest.packageName,
-        versionName: currentManifest.versionName,
-        versionCode: currentManifest.versionCode,
-        changelog: `${currentManifest.versionName} sürümü.`,
-        operationId: intent.data.operationId,
-        size: currentFile.size,
-        sha256: digest,
-        supportsMobile: true,
-        supportsTv,
-        accountRequirement: 'none',
-      });
-      if (!finalized.ok) throw new Error(finalized.error.message);
-
-      const published = await publishVersion(finalized.data.id, newId());
+      if (versionId === null || appId === null) {
+        throw new Error('Yayın yeniden denenecek kayıt bulunamadı.');
+      }
+      const published = await publishVersion(versionId, newId());
       if (!published.ok) throw new Error(published.error.message);
+      setPendingVersionId(null);
 
       setDone({
         appId,
@@ -318,6 +348,7 @@ export function QuickPublish({
           if (deleted.ok) {
             setCreatedAppId(null);
             setCreatedPackage(null);
+            setPendingVersionId(null);
             iconUploadedRef.current = false;
           } else {
             message = `${message} Oluşturulan uygulama silinemedi; Uygulamalar sayfasından denetle.`;
