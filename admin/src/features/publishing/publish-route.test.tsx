@@ -27,6 +27,16 @@ describe('publish routes', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Uygulama seçimi bulunamadı');
   });
 
+  it('shows the quick publish above the step-by-step wizard', async () => {
+    render(await PublishPage({ searchParams: Promise.resolve({}) }));
+
+    expect(
+      screen.getByRole('heading', { name: "APK'yı bırak, gerisini sistem yapsın" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Uygulama bilgileri' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Yayın adımları' })).toBeInTheDocument();
+  });
+
   it('redirects the old version route to the encoded publish query', async () => {
     const appId = 'a1000000-0000-4000-8000-000000000001';
     await NewVersionPage({ params: Promise.resolve({ appId }) });

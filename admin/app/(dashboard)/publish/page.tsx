@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { listCategories, listPublishApps } from '../../../src/features/apps/app-dal';
 import { resolvePreselectedApp } from '../../../src/features/publishing/publish-selection';
 import { PublishWizard } from '../../../src/features/publishing/publish-wizard';
+import { QuickPublish } from '../../../src/features/publishing/quick-publish';
 
 export const metadata: Metadata = { title: 'APK yayınla' };
 // Server-side APK verification reads up to 50 MB over storage ranges and
@@ -27,6 +28,10 @@ export default async function PublishPage({
           <p className="muted">Uygulamayı seç, APK dosyasını doğrula ve son kontrolden sonra yayınla.</p>
         </div>
       </header>
+      <QuickPublish
+        apps={apps}
+        categories={categories.filter(category => category.isActive)}
+      />
       <PublishWizard
         categories={categories.filter(category => category.isActive)}
         initialApp={selection.app}
