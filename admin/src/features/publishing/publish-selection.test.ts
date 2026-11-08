@@ -10,6 +10,7 @@ const apps: readonly PublishAppOption[] = [
     slug: 'cep-arac',
     status: 'active',
     iconPath: null,
+    packageName: 'com.example.cep',
     latestVersionCode: 7,
     latestReleaseMetadata: null,
   },

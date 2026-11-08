@@ -6,6 +6,7 @@ export type PublishAppOption = Readonly<{
   slug: string;
   status: 'active' | 'archived';
   iconPath: string | null;
+  packageName: string | null;
   latestVersionCode: number | null;
   latestReleaseMetadata: ReleaseMetadataInput | null;
 }>;
@@ -16,6 +17,7 @@ type PublishAppRow = Readonly<{
   slug: string;
   status: 'active' | 'archived';
   icon_path: string | null;
+  package_name: string | null;
   app_versions: readonly Readonly<{
     version_code: number;
     status: 'draft' | 'published' | 'withdrawn';
@@ -39,6 +41,7 @@ export function mapPublishAppOptions(rows: readonly PublishAppRow[]): readonly P
       slug: row.slug,
       status: row.status,
       iconPath: row.icon_path,
+      packageName: row.package_name,
       latestVersionCode: row.app_versions.reduce<number | null>(
         (latest, version) => latest === null ? version.version_code : Math.max(latest, version.version_code),
         null,

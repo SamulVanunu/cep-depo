@@ -26,6 +26,7 @@ const app: PublishAppOption = {
   slug: 'cep-arac',
   status: 'active',
   iconPath: null,
+  packageName: 'com.example.cep',
   latestVersionCode: 7,
   latestReleaseMetadata: {
     supportsMobile: true,

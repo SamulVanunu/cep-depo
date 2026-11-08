@@ -11,6 +11,7 @@ describe('publish app options', () => {
         slug: 'bir-uygulama',
         status: 'active',
         icon_path: 'apps/a100/icon.png',
+        package_name: 'com.example.bir',
         app_versions: [
           { version_code: 3, status: 'published', supports_mobile: true, supports_tv: false, account_requirement: 'none' },
           { version_code: 9, status: 'draft', supports_mobile: true, supports_tv: true, account_requirement: 'required' },
@@ -23,6 +24,7 @@ describe('publish app options', () => {
         slug: 'surumsuz',
         status: 'archived',
         icon_path: null,
+        package_name: null,
         app_versions: [],
       },
     ])).toEqual([
@@ -32,6 +34,7 @@ describe('publish app options', () => {
         slug: 'bir-uygulama',
         status: 'active',
         iconPath: 'apps/a100/icon.png',
+        packageName: 'com.example.bir',
         latestVersionCode: 9,
         latestReleaseMetadata: {
           supportsMobile: false,
@@ -45,6 +48,7 @@ describe('publish app options', () => {
         slug: 'surumsuz',
         status: 'archived',
         iconPath: null,
+        packageName: null,
         latestVersionCode: null,
         latestReleaseMetadata: null,
       },

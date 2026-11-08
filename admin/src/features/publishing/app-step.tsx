@@ -152,6 +152,7 @@ export function AppStep({
         slug: staged.slug,
         status: staged.status,
         iconPath,
+        packageName: null,
         latestVersionCode: null,
         latestReleaseMetadata: null,
         isNew: true,

@@ -128,6 +128,7 @@ describe('AppStep', () => {
       slug: 'mevcut-uygulama',
       status: 'active' as const,
       iconPath: 'apps/existing/icon.png',
+      packageName: null,
       latestVersionCode: 7,
       latestReleaseMetadata: null,
       isNew: false as const,
