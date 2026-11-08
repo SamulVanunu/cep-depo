@@ -5,6 +5,7 @@ import { ActionException, toActionError } from '../../server/errors/action-error
 import type { AdminIdentity } from '../../server/auth/require-admin';
 import { isCatalogJsonServerEnabled } from '../../lib/catalog-json-flag';
 import { canonicalJson, computePayloadDigest, sha256Hex } from './payload-digest';
+import { hasStaticCatalogConfig } from './static-json/config';
 
 export const CATALOG_BUCKET = 'catalog' as const;
 export const CATALOG_SCHEMA_VERSION = 2 as const;
@@ -1365,6 +1366,18 @@ export type CatalogRefreshAction = (
   input?: CatalogRefreshActionInput,
 ) => Promise<CatalogRefreshResult>;
 
+export type StaticCatalogPublishStep = (identity: AdminIdentity) => Promise<ActionError | null>;
+
+/**
+ * Loads the GitHub publisher only when it is configured: an unset environment
+ * keeps `static-json/refresh` (and its `server-only` graph) out of the build.
+ */
+async function defaultStaticPublishStep(identity: AdminIdentity): Promise<ActionError | null> {
+  if (!hasStaticCatalogConfig()) return null;
+  const { publishStaticCatalogForAdmin } = await import('./static-json/refresh');
+  return publishStaticCatalogForAdmin(identity);
+}
+
 /**
  * Production wiring: reads the same catalog_app_cards rows the mobile client
  * sees and uploads only to the read-only `catalog` bucket as JSON.
@@ -1378,6 +1391,7 @@ export function createCatalogRefreshAction(
     targetId: string;
     metadata: Readonly<Record<string, string | number | boolean>>;
   }>) => Promise<{ error: MutationError }>,
+  publishStatic: StaticCatalogPublishStep = defaultStaticPublishStep,
 ): CatalogRefreshAction {
   return async function refreshCatalog(input: CatalogRefreshActionInput = {}) {
     // Gate before any side effect: with the flag off the refresh is a clean
@@ -1824,6 +1838,29 @@ export function createCatalogRefreshAction(
         });
       } catch {
         // Audit is best-effort; the caller already holds the refresh warning.
+      }
+    }
+
+    // The static JSON mirror is a convenience for the mobile client: a failure
+    // here never invalidates a committed Storage release, so it surfaces as a
+    // warning the operator can retry.
+    if (!result.error) {
+      const staticError = await publishStatic(identity);
+      if (staticError) {
+        if (recordAudit) {
+          try {
+            await recordAudit({
+              actorId: identity.userId,
+              action: 'catalog.static_refresh_failed',
+              targetType: 'catalog',
+              targetId: 'catalog',
+              metadata: { code: staticError.code },
+            });
+          } catch {
+            // Audit is best-effort; the caller already holds the warning.
+          }
+        }
+        return { error: staticError };
       }
     }
     return result;

@@ -17,8 +17,14 @@ import {
   type CatalogJsonFileName,
 } from './catalog-json';
 
-const generatedAt = '2026-10-28T12:00:00.000Z';
-const defaultReleaseId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+// Static catalog publishing is opt-in through the environment; keep every test
+// hermetic so a developer's shell settings cannot enable it.
+beforeEach(() => {
+  delete process.env.CATALOG_JSON_REPO;
+  delete process.env.CATALOG_JSON_GITHUB_TOKEN;
+});
+
+const generatedAt = '2026-10-28T12:00:00.000Z';const defaultReleaseId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const operationId = 'c8000000-0000-4000-8000-000000000001';
 const actorId = 'c7000000-0000-4000-8000-000000000001';
 const leaseToken = 'c9000000-0000-4000-8000-000000000001';
@@ -570,6 +576,71 @@ describe('createCatalogRefreshAction CATALOG_JSON_ENABLED gate', () => {
     await expect(action()).resolves.toEqual({ error: null });
     expect(authorize).toHaveBeenCalledTimes(1);
     expect(upload).toHaveBeenCalledTimes(3);
+  });
+
+  function staticHarness(
+    upload: ReturnType<typeof vi.fn> = vi.fn(async () => ({ error: null })),
+  ) {
+    process.env[FLAG] = 'true';
+    vi.doMock(ADMIN_CLIENT_MODULE, () => ({
+      getAdminClient: vi.fn(() => ({
+        from: mockFrom,
+        storage: {
+          from: () => ({ upload, download: async () => ({ data: null, error: null }) }),
+        },
+        rpc: vi.fn(async (name: string, args: Record<string, unknown>) =>
+          catalogRpcResponse(name, args),
+        ),
+      })),
+    }));
+    return upload;
+  }
+
+  it('pushes the static catalog after a successful refresh', async () => {
+    staticHarness();
+    const authorize = vi.fn(async () => ({ userId: 'u1' }) as never);
+    const publishStatic = vi.fn(async () => null);
+
+    const action = createCatalogRefreshAction(authorize, undefined, publishStatic);
+    await expect(action()).resolves.toEqual({ error: null });
+
+    expect(publishStatic).toHaveBeenCalledTimes(1);
+    expect(publishStatic).toHaveBeenCalledWith({ userId: 'u1' });
+  });
+
+  it('reports a static publish failure as a warning and audits it', async () => {
+    staticHarness();
+    const authorize = vi.fn(async () => ({ userId: 'u1' }) as never);
+    const staticError = {
+      code: 'FORBIDDEN' as const,
+      message: 'Bu işlem için yetkin bulunmuyor.',
+      correlationId: 'corr-1',
+    };
+    const publishStatic = vi.fn(async () => staticError);
+    const recordAudit = vi.fn(async () => ({ error: null }));
+
+    const action = createCatalogRefreshAction(authorize, recordAudit as never, publishStatic);
+    await expect(action()).resolves.toEqual({ error: staticError });
+
+    expect(recordAudit).toHaveBeenCalledWith({
+      actorId: 'u1',
+      action: 'catalog.static_refresh_failed',
+      targetType: 'catalog',
+      targetId: 'catalog',
+      metadata: { code: 'FORBIDDEN' },
+    });
+  });
+
+  it('does not push the static catalog when the Storage refresh fails', async () => {
+    staticHarness(vi.fn(async () => ({ error: { message: 'storage down' } })));
+    const authorize = vi.fn(async () => ({ userId: 'u1' }) as never);
+    const publishStatic = vi.fn(async () => null);
+
+    const action = createCatalogRefreshAction(authorize, undefined, publishStatic);
+    const result = await action();
+
+    expect(result.error).not.toBeNull();
+    expect(publishStatic).not.toHaveBeenCalled();
   });
 });
 
