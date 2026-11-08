@@ -9,7 +9,7 @@
 
 ---
 
-## 0. Çalışma alanı kuralları
+## Task 0: Çalışma alanı kuralları
 
 Bu iş `feat/accounts-community` worktree'sinde yapılır, ama çalışma ağacında ~167 korumalı
 değişiklik var. Bu yüzden:
@@ -57,7 +57,7 @@ catalog-json.ts createCatalogRefreshAction
 
 ---
 
-## 1. ZIP dizini yardımcılarını dışa aç
+## Task 1: ZIP dizini yardımcılarını dışa aç
 
 **Dosyalar:** `admin/src/features/uploads/apk-manifest.ts`, `admin/src/features/uploads/apk-manifest.test.ts`
 
@@ -191,7 +191,7 @@ git commit -m "refactor(uploads): expose zip directory helpers for apk icon extr
 
 ---
 
-## 2. APK dosya doğrulamasını paylaş
+## Task 2: APK dosya doğrulamasını paylaş
 
 **Dosyalar:** `admin/src/features/uploads/apk-file.ts` (yeni), `admin/src/features/publishing/apk-step.tsx`
 
@@ -237,7 +237,7 @@ git commit -m "refactor(uploads): share apk file validation"
 
 ---
 
-## 3. Launcher ikonu çıkarma
+## Task 3: Launcher ikonu çıkarma
 
 **Dosyalar:** `admin/src/features/uploads/apk-icon.ts` (yeni), `apk-icon.test.ts` (yeni),
 `admin/src/features/uploads/fixtures/manifest-apk.ts`
@@ -418,7 +418,7 @@ git commit -m "feat(uploads): extract launcher icon from apk zip entries"
 
 ---
 
-## 4. Statik katalog env yapılandırması
+## Task 4: Statik katalog env yapılandırması
 
 **Dosyalar:** `admin/src/features/catalog/static-json/config.ts` (yeni), `config.test.ts` (yeni)
 
@@ -498,7 +498,7 @@ git commit -m "feat(catalog): read static catalog github config"
 
 ---
 
-## 5. Statik yayın sarmalayıcısı
+## Task 5: Statik yayın sarmalayıcısı
 
 **Dosyalar:** `admin/src/features/catalog/static-json/refresh.ts` (yeni), `refresh.test.ts` (yeni)
 
@@ -582,7 +582,7 @@ git commit -m "feat(catalog): wrap static catalog github publishing"
 
 ---
 
-## 6. Katalog yenilemesine statik adımı ekle
+## Task 6: Katalog yenilemesine statik adımı ekle
 
 **Dosyalar:** `admin/src/features/catalog/catalog-json.ts`, `admin/src/features/catalog/catalog-json.test.ts`
 
@@ -680,7 +680,7 @@ git commit -m "feat(catalog): push static catalog json after a successful refres
 
 ---
 
-## 7. Ortak varlık yükleme modülü
+## Task 7: Ortak varlık yükleme modülü
 
 **Dosyalar:** `admin/src/features/publishing/upload-asset.ts` (yeni), `admin/src/features/publishing/publish-wizard.tsx`
 
@@ -703,7 +703,7 @@ git commit -m "refactor(publishing): share asset upload with quick publish"
 
 ---
 
-## 8. Paket adını yayın akışına taşı
+## Task 8: Paket adını yayın akışına taşı
 
 **Dosyalar:** `admin/src/features/apps/publish-app-options.ts`, `app-dal.ts`,
 `publish-app-options.test.ts`, `publish-selection.test.ts`, `publish-wizard.test.tsx`
@@ -737,7 +737,7 @@ git commit -m "feat(admin): expose app package name to publish flows"
 
 ---
 
-## 9. Slug normalizer'ını dışa aç
+## Task 9: Slug normalizer'ını dışa aç
 
 **Dosyalar:** `admin/src/features/apps/app-schema.ts`
 
@@ -754,7 +754,7 @@ git commit -m "refactor(admin): export slug normalizer"
 
 ---
 
-## 10. Hızlı yayın modeli (saf fonksiyonlar)
+## Task 10: Hızlı yayın modeli (saf fonksiyonlar)
 
 **Dosyalar:** `admin/src/features/publishing/quick-publish-model.ts` (yeni), `quick-publish-model.test.ts` (yeni)
 
@@ -831,7 +831,7 @@ git commit -m "feat(publishing): derive quick publish metadata from the apk"
 
 ---
 
-## 11. Hızlı yayın bileşeni
+## Task 11: Hızlı yayın bileşeni
 
 **Dosyalar:** `admin/src/features/publishing/quick-publish.tsx` (yeni), `quick-publish.test.tsx` (yeni)
 
@@ -981,7 +981,7 @@ git commit -m "feat(publishing): add one-screen quick apk publish flow"
 
 ---
 
-## 12. Sayfaya bağla
+## Task 12: Sayfaya bağla
 
 **Dosyalar:** `admin/app/(dashboard)/publish/page.tsx`, `admin/src/features/publishing/publish-route.test.tsx`
 
@@ -1018,7 +1018,7 @@ git commit -m "feat(admin): show quick publish above the apk wizard"
 
 ---
 
-## 13. Doğrulama
+## Task 13: Doğrulama
 
 - [ ] Hedefli testler:
 
