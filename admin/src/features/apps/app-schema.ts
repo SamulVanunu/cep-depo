@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-function normalizeSlug(value: string): string {
+export function normalizeSlug(value: string): string {
   return value
     .trim()
     .toLocaleLowerCase('tr-TR')
