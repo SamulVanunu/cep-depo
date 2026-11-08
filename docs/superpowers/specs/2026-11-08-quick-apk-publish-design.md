@@ -32,9 +32,10 @@ Sayfa: `admin/app/(dashboard)/publish/page.tsx` (APK Yükle). Sayfanın üstüne
    - `shortDescription` / `description`: `<Title> Android uygulaması.` ile ön doldurulur
      (şema en az 10 karakter ister), düzenlenebilir.
 4. Tek onay ekranı gösterilir: başlık, kategori (tek seçim, zorunlu), kısa açıklama,
-   açıklama, ikon önizlemesi (değiştirilebilir), sürüm bilgisi (salt okunur),
-   ekran görüntüleri (isteğe bağlı, elle), "Yayınla" düğmesi. Slug varsayılan olarak
-   kapalı bir "Gelişmiş" bölümünde düzenlenebilir.
+   açıklama, ikon önizlemesi (değiştirilebilir), sürüm bilgisi (salt okunur) ve
+   "Yayınla" düğmesi. Slug varsayılan olarak kapalı bir "Gelişmiş" bölümünde
+   düzenlenebilir. Ekran görüntüleri hızlı akışta istenmez; yayın sonrası
+   "Uygulamayı yönet" bağlantısıyla mevcut varlık yöneticisinden elle eklenir.
 5. Onayda sırasıyla:
    1. Paket adı eşleşmesi kontrol edilir (bkz. aşağı).
    2. Yeni uygulama gerekiyorsa `createPublishingAppAction` çağrılır.
@@ -105,12 +106,18 @@ genişletilir:
 ## Dosyalar
 
 - `admin/src/features/uploads/apk-icon.ts` (yeni) + `apk-icon.test.ts`
+- `admin/src/features/uploads/apk-manifest.ts` (ZIP dizini ve girdi okuma yardımcıları dışa açılır)
+- `admin/src/features/uploads/fixtures/manifest-apk.ts` (ikon girdili APK fixture'ı)
 - `admin/src/features/publishing/quick-publish.tsx` (yeni) + `quick-publish.test.tsx`
 - `admin/src/features/publishing/quick-publish-model.ts` (yeni, türetme/eşleştirme saf fonksiyonları) + test
+- `admin/src/features/publishing/upload-asset.ts` (yeni, sihirbazdaki ortak varlık yükleme)
+- `admin/src/features/publishing/publish-wizard.tsx` (ortak varlık modülünü kullanır)
 - `admin/app/(dashboard)/publish/page.tsx` (bölüm eklenir)
-- `admin/src/features/catalog/catalog-json.ts` (statik yayın eklenir)
+- `admin/src/features/apps/publish-app-options.ts` ve `app-dal.ts` (`packageName` alanı)
+- `admin/src/features/apps/app-schema.ts` (`normalizeSlug` dışa açılır)
+- `admin/src/features/catalog/static-json/refresh.ts` (yeni, statik yayın sarmalayıcısı) + test
+- `admin/src/features/catalog/catalog-json.ts` (başarılı DB yayınından sonra statik yayın)
 - `admin/src/features/versions/version-service.ts` (uyarı akışı doğrulanır)
-- `admin/src/features/apps/app-dal.ts` (paket adı sorgusu)
 
 ## Test planı
 
