@@ -10,6 +10,7 @@ import {
   verifyLocalApkMagic,
 } from '../uploads/external-apk';
 import { hashFile } from '../uploads/hash-file';
+import { validateApkFile } from '../uploads/apk-file';
 import {
   startTusUpload,
   type TusCallbacks,
@@ -18,8 +19,6 @@ import {
 } from '../uploads/tus-upload';
 import { createUploadIntentAction, finalizeUploadAction } from '../uploads/upload-actions';
 import {
-  APK_MAX_BYTES,
-  APK_MIME_TYPES,
   releaseMetadataSchema,
   type ReleaseMetadataInput,
 } from '../uploads/upload-schema';
@@ -59,24 +58,6 @@ type SourceMode = 'storage' | 'external';
 
 function formatMiB(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
-}
-
-function validateFile(file: File | null, source: SourceMode): string | null {
-  if (!file || file.size === 0) {
-    return source === 'external'
-      ? 'Önce bağlantıdaki APK’nın aynı yerel kopyasını seç.'
-      : 'Geçerli bir APK dosyası seçmelisin.';
-  }
-  if (!file.name.toLocaleLowerCase('tr-TR').endsWith('.apk')) return 'Dosya uzantısı .apk olmalıdır.';
-  const mimeType = file.type || 'application/octet-stream';
-  if (!APK_MIME_TYPES.includes(mimeType as (typeof APK_MIME_TYPES)[number])) {
-    return 'Seçilen dosyanın APK türü doğrulanamadı.';
-  }
-  if (file.size > APK_MAX_BYTES) return 'APK dosyası 500 MiB sınırını aşamaz.';
-  if (source === 'storage' && file.size > HOSTED_STORAGE_MAX_BYTES) {
-    return 'Supabase Storage bu planda 50.000.000 bayt üzerindeki APK dosyalarını kabul etmez.';
-  }
-  return null;
 }
 
 export function ApkStep({
@@ -170,7 +151,7 @@ export function ApkStep({
       return;
     }
     const selectedFile = file;
-    const fileError = validateFile(selectedFile, source);
+    const fileError = validateApkFile(selectedFile, source);
     if (fileError) {
       fail(fileError, !selectedFile || selectedFile.size === 0);
       return;
