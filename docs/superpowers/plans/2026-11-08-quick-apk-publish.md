@@ -989,12 +989,18 @@ git commit -m "feat(publishing): add one-screen quick apk publish flow"
 
 ```tsx
 import { QuickPublish } from '../../../src/features/publishing/quick-publish';
-...
-<QuickPublish
-  apps={apps}
-  categories={categories.filter(category => category.isActive)}
-/>
-<PublishWizard ... />
+
+// ... mevcut importlar ve bileşen gövdesi aynen kalır ...
+
+      <QuickPublish
+        apps={apps}
+        categories={categories.filter(category => category.isActive)}
+      />
+      <PublishWizard
+        categories={categories.filter(category => category.isActive)}
+        initialApp={selection.app}
+        initialSelectionInvalid={selection.invalid}
+      />
 ```
 
 - [ ] **12.2** `publish-route.test.tsx`'e bir test ekle:
