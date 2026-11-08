@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 
-import { createBrowserSupabaseClient } from '../../lib/supabase/browser';
 import type { ActionResult } from '../../server/errors/action-error';
 import {
   createPublishingAppAction,
@@ -11,12 +10,6 @@ import {
   type PublishingAppData,
 } from '../apps/app-actions';
 import type { PublishingAppInput } from '../apps/app-schema';
-import {
-  addScreenshotAction,
-  cleanupPublishingAssetAction,
-  requestAssetUploadAction,
-  setAppIconAction,
-} from '../apps/asset-actions';
 import type { CategoryOption } from '../apps/app-dal';
 import type { PublishAppOption } from '../apps/publish-app-options';
 import {
@@ -26,6 +19,7 @@ import { ApkStep, type ApkStepDependencies } from './apk-step';
 import { AppStep } from './app-step';
 import { createPublishOperationTracker } from './publish-operation-id';
 import type { PublishReview, PublishWizardState, SelectedPublishApp } from './publish-types';
+import { uploadPublishingAsset } from './upload-asset';
 
 type PublishWizardProps = Readonly<{
   categories: readonly Pick<CategoryOption, 'id' | 'name'>[];
@@ -46,54 +40,6 @@ type PublishWizardProps = Readonly<{
     typeof publishVersionReplacingPreviousAction;
 }>;
 
-async function uploadPublishingAsset(input: Readonly<{
-  appId: string;
-  operationId: string;
-  kind: 'icon' | 'screenshot';
-  file: File;
-  altText: string;
-  position: number;
-}>): Promise<string> {
-  const intent = await requestAssetUploadAction({
-    appId: input.appId,
-    kind: input.kind,
-    fileName: input.file.name,
-    mimeType: input.file.type,
-    size: input.file.size,
-  });
-  if (!intent.ok) throw new Error('asset-intent-failed');
-  const client = createBrowserSupabaseClient();
-  const uploaded = await client.storage
-    .from(intent.data.bucket)
-    .uploadToSignedUrl(intent.data.path, intent.data.token, input.file, { contentType: input.file.type });
-  if (uploaded.error) {
-    await cleanupPublishingAssetAction({
-      appId: input.appId,
-      requestId: input.operationId,
-      path: intent.data.path,
-      kind: input.kind,
-    });
-    throw new Error('asset-upload-failed');
-  }
-  const saved = input.kind === 'icon'
-    ? await setAppIconAction(input.appId, intent.data.path)
-    : await addScreenshotAction({
-        appId: input.appId,
-        path: intent.data.path,
-        altText: input.altText,
-        position: input.position,
-      });
-  if (!saved.ok) {
-    await cleanupPublishingAssetAction({
-      appId: input.appId,
-      requestId: input.operationId,
-      path: intent.data.path,
-      kind: input.kind,
-    });
-    throw new Error('asset-save-failed');
-  }
-  return intent.data.path;
-}
 
 async function compensatePublishingApp(input: Readonly<{ id: string; title: string; operationId: string }>) {
   void input.operationId;
