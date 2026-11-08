@@ -536,3 +536,25 @@ export async function createApkWithZip64Eocd(): Promise<Blob> {
   dv.setUint16(eocd + 10, 0xffff, true);
   return blobFromBytes(bytes);
 }
+
+/** Builds a structurally valid APK that also carries arbitrary ZIP entries. */
+export async function createApkWithEntries(
+  entries: readonly Readonly<{ name: string; data: Uint8Array; method?: number }>[],
+): Promise<Blob> {
+  const axml = buildManifestXml();
+  const specs: ZipEntrySpec[] = [
+    { name: 'AndroidManifest.xml', data: axml, method: COMPRESSION_STORED, crc: crc32(axml) },
+  ];
+  for (const entry of entries) {
+    const method = entry.method ?? COMPRESSION_STORED;
+    const stored = method === COMPRESSION_DEFLATE ? await deflateRaw(entry.data) : entry.data;
+    specs.push({
+      name: entry.name,
+      data: stored,
+      method,
+      uncompressedSize: entry.data.length,
+      crc: crc32(entry.data),
+    });
+  }
+  return blobFromBytes(assembleZip(specs));
+}
