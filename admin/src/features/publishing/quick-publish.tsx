@@ -120,6 +120,7 @@ export function QuickPublish({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [createdAppId, setCreatedAppId] = useState<string | null>(null);
+  const [createdPackage, setCreatedPackage] = useState<string | null>(null);
   const [done, setDone] = useState<Done | null>(null);
   const [retrying, setRetrying] = useState(false);
 
@@ -147,6 +148,7 @@ export function QuickPublish({
     setError(null);
     setProgress(0);
     setCreatedAppId(null);
+    setCreatedPackage(null);
     setDone(null);
     setRetrying(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -164,6 +166,13 @@ export function QuickPublish({
     setError(null);
     try {
       const parsed = await parseApk(next);
+      // A pending app belongs to the APK it was created from; a different
+      // package must start a new app instead of publishing into that one.
+      if (createdAppId && createdPackage !== parsed.packageName) {
+        setCreatedAppId(null);
+        setCreatedPackage(null);
+        iconUploadedRef.current = false;
+      }
       const extracted = await extractIcon(next);
       const packageMatch = matchPackage(parsed.packageName, apps);
 
@@ -223,8 +232,9 @@ export function QuickPublish({
     const currentFile = file;
     const currentManifest = manifest;
     const mimeType = currentFile.type || 'application/octet-stream';
-    let appId = createdAppId
-      ?? (match.kind === 'existing' ? match.app.id : null);
+    let appId = (createdAppId && createdPackage === currentManifest.packageName)
+      ? createdAppId
+      : (match.kind === 'existing' ? match.app.id : null);
     let created: string | null = null;
 
     try {
@@ -241,6 +251,7 @@ export function QuickPublish({
         appId = createdApp.data.id;
         created = appId;
         setCreatedAppId(appId);
+        setCreatedPackage(currentManifest.packageName);
       }
 
       if (icon && !iconUploadedRef.current) {
@@ -306,6 +317,7 @@ export function QuickPublish({
           const deleted = await deleteApp(created, title);
           if (deleted.ok) {
             setCreatedAppId(null);
+            setCreatedPackage(null);
             iconUploadedRef.current = false;
           } else {
             message = `${message} Oluşturulan uygulama silinemedi; Uygulamalar sayfasından denetle.`;

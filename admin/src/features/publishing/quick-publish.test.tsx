@@ -254,4 +254,42 @@ describe('QuickPublish', () => {
     expect(props.deleteApp).toHaveBeenCalledWith(appId, 'Vizyona');
     expect(screen.getByRole('button', { name: 'Yayınla' })).toBeInTheDocument();
   });
+
+  it('does not reuse an app created for a different package', async () => {
+    const { props } = dependencies();
+    props.deleteApp.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'TEMPORARY', message: 'Silinemedi.', correlationId: 'c' },
+    } as never);
+    props.publishVersion.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'TEMPORARY', message: 'Sürüm yayınlanamadı.', correlationId: 'c' },
+    } as never);
+    props.parseApk
+      .mockResolvedValueOnce({
+        packageName: 'com.ornek.vizyona',
+        versionName: '1.2.3',
+        versionCode: 12,
+      })
+      .mockResolvedValueOnce({
+        packageName: 'com.ornek.baska',
+        versionName: '2.0.0',
+        versionCode: 20,
+      });
+    const user = userEvent.setup();
+    render(<QuickPublish apps={[]} categories={categories} {...props} />);
+
+    await user.upload(screen.getByLabelText('APK dosyası'), apkFile());
+    await user.selectOptions(screen.getByLabelText('Kategori'), categoryId);
+    await user.click(screen.getByRole('button', { name: 'Yayınla' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Oluşturulan uygulama silinemedi');
+
+    await user.upload(screen.getByLabelText('APK dosyası'), apkFile());
+    expect(await screen.findByText('Sürüm 2.0.0 (20)')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Kategori'), categoryId);
+    await user.click(screen.getByRole('button', { name: 'Yayınla' }));
+
+    expect(await screen.findByText('Yayın tamamlandı')).toBeInTheDocument();
+    expect(props.createPublishingApp).toHaveBeenCalledTimes(2);
+  });
 });
