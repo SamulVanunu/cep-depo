@@ -133,16 +133,17 @@ function readAxmlString(
   }
 }
 
-interface CentralEntry {
+export interface ZipEntry {
   name: string;
   method: number;
   compressedSize: number;
+  uncompressedSize: number;
   localOffset: number;
 }
 
-function parseCentralDirectory(cd: Uint8Array, totalEntries: number): CentralEntry[] {
+function parseCentralDirectory(cd: Uint8Array, totalEntries: number): ZipEntry[] {
   const view = new DataView(cd.buffer, cd.byteOffset, cd.byteLength);
-  const entries: CentralEntry[] = [];
+  const entries: ZipEntry[] = [];
   let cursor = 0;
   while (cursor < cd.length) {
     if (entries.length >= MAX_ZIP_ENTRIES) reject();
@@ -150,6 +151,7 @@ function parseCentralDirectory(cd: Uint8Array, totalEntries: number): CentralEnt
     if (readU32(view, cursor) !== ZIP_CENTRAL_SIG) reject();
     const method = readU16(view, cursor + 10);
     const compressedSize = readU32(view, cursor + 20);
+    const uncompressedSize = readU32(view, cursor + 24);
     const nameLen = readU16(view, cursor + 28);
     const extraLen = readU16(view, cursor + 30);
     const commentLen = readU16(view, cursor + 32);
@@ -157,7 +159,7 @@ function parseCentralDirectory(cd: Uint8Array, totalEntries: number): CentralEnt
     if (cursor + 46 + nameLen + extraLen + commentLen > cd.length) reject();
     const nameBytes = cd.subarray(cursor + 46, cursor + 46 + nameLen);
     const name = new TextDecoder('utf-8').decode(nameBytes);
-    entries.push({ name, method, compressedSize, localOffset });
+    entries.push({ name, method, compressedSize, uncompressedSize, localOffset });
     cursor += 46 + nameLen + extraLen + commentLen;
   }
   // The EOCD entry count must match the directory we actually parsed.
@@ -336,8 +338,14 @@ function parsePositiveIntCode(value: string | number): number {
   return n;
 }
 
-async function readEntryData(source: ApkByteSource, entry: CentralEntry): Promise<Uint8Array> {
-  if (entry.compressedSize <= 0 || entry.compressedSize > MAX_MANIFEST_COMPRESSED_BYTES) reject();
+async function readEntryData(
+  source: ApkByteSource,
+  entry: ZipEntry,
+  limits: Readonly<{ maxCompressedBytes?: number; maxUncompressedBytes?: number }> = {},
+): Promise<Uint8Array> {
+  const maxCompressed = limits.maxCompressedBytes ?? MAX_MANIFEST_COMPRESSED_BYTES;
+  const maxUncompressed = limits.maxUncompressedBytes ?? MAX_MANIFEST_UNCOMPRESSED_BYTES;
+  if (entry.compressedSize <= 0 || entry.compressedSize > maxCompressed) reject();
   if (entry.localOffset + 30 > source.size) reject();
   const header = await sliceBuffer(source, entry.localOffset, entry.localOffset + 30);
   if (header.length < 30) reject();
@@ -349,7 +357,7 @@ async function readEntryData(source: ApkByteSource, entry: CentralEntry): Promis
   if (dataOffset + entry.compressedSize > source.size) reject();
 
   if (entry.method === COMPRESSION_STORED) {
-    if (entry.compressedSize > MAX_MANIFEST_UNCOMPRESSED_BYTES) reject();
+    if (entry.compressedSize > maxUncompressed) reject();
     return sliceBuffer(source, dataOffset, dataOffset + entry.compressedSize);
   }
   if (entry.method === COMPRESSION_DEFLATE) {
@@ -371,7 +379,7 @@ async function readEntryData(source: ApkByteSource, entry: CentralEntry): Promis
       const { done, value } = await reader.read();
       if (done) break;
       total += value!.length;
-      if (total > MAX_MANIFEST_UNCOMPRESSED_BYTES) {
+      if (total > maxUncompressed) {
         await reader.cancel();
         reject();
       }
@@ -383,19 +391,12 @@ async function readEntryData(source: ApkByteSource, entry: CentralEntry): Promis
 }
 
 /**
- * Parses an APK manifest from any `ApkByteSource` and returns a normalized,
- * validated `ParsedApkManifest`.
+ * Reads the ZIP central directory without reading file data.
  *
- * Reads only small slices of the APK (ZIP magic, EOCD tail window, central
- * directory, local header, manifest entry data) and decompresses the manifest
- * entry with `DecompressionStream`.
- *
- * Structural problems are reported with the single Turkish message below. A
- * failure from the byte source itself (for example a transient storage range
- * error) is deliberately left untouched: the server must be able to tell a
- * broken upload apart from a broken network.
+ * Throws the operator-facing APK error for a malformed archive; a failure from
+ * the byte source itself is left untouched.
  */
-export async function parseApkManifestFromSource(source: ApkByteSource): Promise<ParsedApkManifest> {
+export async function readZipDirectory(source: ApkByteSource): Promise<readonly ZipEntry[]> {
   const size = source.size;
 
   // 1. ZIP local-file-header magic.
@@ -426,7 +427,34 @@ export async function parseApkManifestFromSource(source: ApkByteSource): Promise
 
   // 3. Central directory.
   const cd = await sliceBuffer(source, eocd.cdOffset, eocd.cdOffset + eocd.cdSize);
-  const entries = parseCentralDirectory(cd, eocd.totalEntries);
+  return parseCentralDirectory(cd, eocd.totalEntries);
+}
+
+/** Reads and decompresses one central-directory entry. */
+export async function readZipEntry(
+  source: ApkByteSource,
+  entry: ZipEntry,
+  limits: Readonly<{ maxCompressedBytes?: number; maxUncompressedBytes?: number }> = {},
+): Promise<Uint8Array> {
+  return readEntryData(source, entry, limits);
+}
+
+/**
+ * Parses an APK manifest from any `ApkByteSource` and returns a normalized,
+ * validated `ParsedApkManifest`.
+ *
+ * Reads only small slices of the APK (ZIP magic, EOCD tail window, central
+ * directory, local header, manifest entry data) and decompresses the manifest
+ * entry with `DecompressionStream`.
+ *
+ * Structural problems are reported with the single Turkish message below. A
+ * failure from the byte source itself (for example a transient storage range
+ * error) is deliberately left untouched: the server must be able to tell a
+ * broken upload apart from a broken network.
+ */
+export async function parseApkManifestFromSource(source: ApkByteSource): Promise<ParsedApkManifest> {
+  // 1-3. ZIP magic, end of central directory and the central directory itself.
+  const entries = await readZipDirectory(source);
 
   // 4. Locate exactly one `AndroidManifest.xml`.
   const manifestEntries = entries.filter((e) => e.name === MANIFEST_NAME);

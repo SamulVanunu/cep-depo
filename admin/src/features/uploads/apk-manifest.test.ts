@@ -6,6 +6,8 @@ import {
   MAX_MANIFEST_UNCOMPRESSED_BYTES,
   parseApkManifest,
   parseApkManifestFromSource,
+  readZipDirectory,
+  readZipEntry,
   type ApkByteSource,
 } from './apk-manifest';
 import {
@@ -407,5 +409,37 @@ describe('parseApkManifestFromSource hardening', () => {
     } as unknown as Blob;
 
     await expect(parseApkManifest(broken)).rejects.toThrow(EXPECTED_ERROR);
+  });
+});
+
+describe('zip directory helpers', () => {
+  it('lists entries with their sizes from the central directory', async () => {
+    const file = await createValidApk({
+      packageName: 'com.example.entries',
+      versionName: '1.0.0',
+      versionCode: 3,
+    });
+    const entries = await readZipDirectory(await fixtureSource(file));
+
+    const manifest = entries.find(entry => entry.name === 'AndroidManifest.xml');
+    expect(manifest).toBeDefined();
+    expect(manifest!.uncompressedSize).toBeGreaterThan(0);
+    expect(manifest!.compressedSize).toBeGreaterThan(0);
+  });
+
+  it('reads an entry as its uncompressed bytes', async () => {
+    const file = await createValidApk({
+      packageName: 'com.example.entry',
+      versionName: '1.2.0',
+      versionCode: 12,
+    });
+    const source = await fixtureSource(file);
+    const entries = await readZipDirectory(source);
+    const manifest = entries.find(entry => entry.name === 'AndroidManifest.xml')!;
+
+    const bytes = await readZipEntry(source, manifest);
+    expect(bytes.length).toBe(manifest.uncompressedSize);
+    // Android binary XML document header: RES_XML_TYPE (0x0003), headerSize 8.
+    expect([bytes[0], bytes[1], bytes[2], bytes[3]]).toEqual([0x03, 0x00, 0x08, 0x00]);
   });
 });
